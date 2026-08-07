@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1013,14 +1013,21 @@ const TABS = [['overview','Overview'],['month','Manager of the Month'],['season'
               ['prizes','Prize pot'],['email','Email round-up']];
 
 function initTheme(){
-  const saved = null; // storage is unavailable in some embeds; default to OS
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.dataset.theme = saved || (prefersDark ? 'dark' : 'light');
+  // Dark is the house style. A visitor who switches to light gets their choice
+  // remembered on their own device; everyone else, and every first visit, sees
+  // dark. Storage is wrapped because some embeds and private modes block it.
+  const store = {
+    get(){ try { return localStorage.getItem('fpl-theme'); } catch(e){ return null; } },
+    set(v){ try { localStorage.setItem('fpl-theme', v); } catch(e){ /* no-op */ } },
+  };
+  const saved = store.get();
+  document.documentElement.dataset.theme = (saved === 'light' || saved === 'dark') ? saved : 'dark';
   const btn = $('#themeBtn');
   const sync = () => btn.textContent = document.documentElement.dataset.theme === 'dark' ? 'Light' : 'Dark';
   btn.addEventListener('click', ()=>{
-    document.documentElement.dataset.theme =
-      document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    store.set(next);
     sync(); render(state.tab);
   });
   sync();
