@@ -1,0 +1,56 @@
+name: Refresh league data
+
+on:
+  schedule:
+    # 06:10 and 18:10 UTC daily. FPL finalises bonus points and auto-subs a few
+    # hours after the last whistle, so two passes a day means the site is never
+    # more than half a day behind - and always correct by the morning after.
+    - cron: "10 6 * * *"
+    - cron: "10 18 * * *"
+  workflow_dispatch:        # the "Run workflow" button, for an instant refresh
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/data.json"   # stops the bot's own commit re-triggering the job
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore API cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: fpl-cache-${{ github.run_id }}
+          restore-keys: fpl-cache-
+
+      - name: Build data.json
+        run: python3 scripts/build.py
+
+      - name: Commit refreshed data
+        run: |
+          set -x
+          if [ ! -f docs/data.json ]; then
+            echo "::error::build.py did not produce docs/data.json"
+            ls -R docs scripts || true
+            exit 1
+          fi
+          git config user.name  "league-bot"
+          git config user.email "league-bot@users.noreply.github.com"
+          git add -f docs/data.json
+          if git diff --staged --quiet; then
+            echo "No change since last run - nothing to commit."
+            exit 0
+          fi
+          git commit -m "Refresh league data ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+          git pull --rebase --autostash origin main || true
+          git push
