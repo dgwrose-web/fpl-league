@@ -8,7 +8,7 @@
   "_comment_prizes": "Set these once. Leave amounts at 0 until you've agreed the pot - the site shows 'TBC' for anything at 0. currency is a symbol.",
   "prize_pot": {
     "currency": "£",
-    "entry_fee": 0,
+    "entry_fee": 50,
     "manager_of_the_month": 0,
     "cup_winner": 0,
     "cup_runner_up": 0,
