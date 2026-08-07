@@ -1,0 +1,8 @@
+{
+  "_readme": "Hand-written monthly round-ups. Keyed by month (YYYY-MM). Whatever is here replaces the auto-generated commentary on the Email round-up tab. Each entry takes either 'body_html' (rich, recommended) or 'body' (plain text, blank line between paragraphs). Claude drops a new entry in here each month; you never need to touch it.",
+
+  "_example": {
+    "title": "September: the month everyone captained the wrong striker",
+    "body_html": "<p style=\"font-size:15px;line-height:1.55\">Example paragraph. Delete this block once the real months start landing.</p>"
+  }
+}

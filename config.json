@@ -1,0 +1,29 @@
+{
+  "league_id": 625223,
+  "season_label": "2026/27",
+
+  "_comment_motm": "How Manager of the Month is scored. 'net' subtracts transfer hits (matches how the league table works). 'gross' ignores hits. FPL's own MOTM uses net.",
+  "motm_basis": "net",
+
+  "_comment_prizes": "Set these once. Leave amounts at 0 until you've agreed the pot - the site shows 'TBC' for anything at 0. currency is a symbol.",
+  "prize_pot": {
+    "currency": "£",
+    "entry_fee": 0,
+    "manager_of_the_month": 0,
+    "cup_winner": 0,
+    "cup_runner_up": 0,
+    "season": {
+      "1st": 0,
+      "2nd": 0,
+      "3rd": 0,
+      "4th": 0,
+      "5th": 0
+    }
+  },
+
+  "_comment_cup": "FPL creates mini-league cups automatically. Set cup_start_event if you know it; null means 'read it from the API when it exists'.",
+  "cup_start_event": null,
+
+  "_comment_months": "Months to publish. A gameweek belongs to the calendar month of its DEADLINE (Europe/London). That gives Aug=GW1-2, Sep=GW3-5, Oct=GW6-9 for 2026/27. Override here only if FPL publishes a different split.",
+  "month_overrides": {}
+}
