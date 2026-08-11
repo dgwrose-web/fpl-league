@@ -8,42 +8,54 @@
   :root {
     --surface-1: #fcfcfb;
     --plane: #f9f9f7;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-    --muted: #898781;
-    --grid: #e1e0d9;
-    --axis: #c3c2b7;
-    --border: rgba(11,11,11,0.10);
-    --series-1: #2a78d6;
-    --series-2: #eb6834;
-    --series-3: #1baf7a;
-    --series-4: #eda100;
-    --series-5: #e87ba4;
-    --context: #c3c2b7;
-    --good: #0ca30c;
-    --warning: #fab219;
-    --critical: #d03b3b;
-    --success-text: #006300;
-    --seq-100:#cde2fb; --seq-250:#86b6ef; --seq-400:#3987e5; --seq-550:#1c5cab; --seq-700:#0d366b;
+    --text-primary: #1a0420;
+    --text-secondary: #55415b;
+    --muted: #7e6b84;
+    --grid: #e7dfeb;
+    --axis: #cfc2d5;
+    --border: rgba(26,4,32,0.12);
+    /* Series hues are Premier League brand families stepped for THIS surface -
+       validated: lightness band, chroma floor, CVD separation, contrast. The
+       neon brand greens/cyans are accents only; as large fills they glare. */
+    --series-1: #00875a;
+    --series-2: #1f6fa8;
+    --series-3: #c4004a;
+    --series-4: #7a3fd1;
+    --series-5: #8f6200;
+    --context: #c3b5c9;
+    --brand-purple: #37003c;
+    --accent: #00a862;
+    --accent-2: #0090a8;
+    --good: #00875a;
+    --warning: #9a6400;
+    --critical: #c4004a;
+    --success-text: #006b47;
+    --seq-100:#f0e2f7; --seq-250:#d3aee6; --seq-400:#a865cf; --seq-550:#7a3fa8; --seq-700:#4a1f6b;
     color-scheme: light;
   }
   :root[data-theme="dark"] {
-    --surface-1: #1a1a19;
-    --plane: #0d0d0d;
+    --surface-1: #2a0730;
+    --plane: #1a0420;
     --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --border: rgba(255,255,255,0.10);
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --context: #4a4a46;
-    --good: #0ca30c;
-    --success-text: #0ca30c;
+    --text-secondary: #cbb6d1;
+    --muted: #9b83a3;
+    --grid: #3d1a45;
+    --axis: #4f2a58;
+    --border: rgba(255,255,255,0.13);
+    --series-1: #00b06e;
+    --series-2: #2e97cc;
+    --series-3: #e90052;
+    --series-4: #9b5fe8;
+    --series-5: #c07e00;
+    --context: #5a3d62;
+    --brand-purple: #37003c;
+    --accent: #00ff87;
+    --accent-2: #04f5ff;
+    --good: #00ff87;
+    --warning: #ffb020;
+    --critical: #ff5c8a;
+    --success-text: #00ff87;
+    --seq-100:#f0d9fb; --seq-250:#d9a8f0; --seq-400:#b06fd6; --seq-550:#8a3fb0; --seq-700:#5f1f77;
     color-scheme: dark;
   }
 
@@ -203,6 +215,80 @@
 
   @media print { nav.tabs, button, .foot { display:none !important; }
                  section.panel { display:block !important; page-break-inside:avoid; } }
+
+  /* ---- Premier League brand treatment ----------------------------------
+     The purple masthead and the green/cyan/magenta accent rule are the FPL
+     signature. Accents are used on edges, rules and small marks - never as
+     large fills, where the neons glare and hurt readability. Every text
+     colour still comes from a text token, never a series colour. */
+
+  header.top {
+    background: linear-gradient(102deg, #37003c 0%, #4b0a55 52%, #2a0730 100%);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+    margin-bottom: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  header.top::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: linear-gradient(90deg, #00ff87 0%, #04f5ff 42%, #963cff 72%, #e90052 100%);
+  }
+  header.top h1  { color: #ffffff; }
+  header.top .sub { color: rgba(255,255,255,0.80); }
+  header.top button.ghost {
+    background: rgba(255,255,255,0.12); color: #ffffff;
+    border-color: rgba(255,255,255,0.30);
+  }
+  header.top button.ghost:hover { background: rgba(255,255,255,0.20); }
+
+  /* Tabs: the selected one carries the brand green underneath. */
+  nav.tabs button[aria-selected="true"] {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface-1));
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  /* Table headers sit under a green rule; rows band gently and light up on
+     hover so a finger or cursor never loses its place across a wide row. */
+  th { border-bottom: 2px solid color-mix(in srgb, var(--accent) 50%, var(--grid)); }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--text-primary) 3.5%, transparent); }
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  /* The top five are the prize places, so they get a quiet green wash and a
+     single edge marker on the row - the marker goes on the first cell only,
+     or it repeats as a bar between every column. */
+  tr.me td {
+    background: color-mix(in srgb, var(--accent) 9%, transparent) !important;
+  }
+  tr.me td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  /* Keep the rank clear of that edge marker - applied to every row so the
+     column stays aligned above and below the prize cut. */
+  td.pos { padding-left: 10px; width: 44px; }
+
+  /* KPI tiles: a thin brand stripe, cycled in fixed order so a tile keeps its
+     colour as the season goes on. */
+  .kpi { position: relative; overflow: hidden; }
+  .kpi::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: var(--accent);
+  }
+  .kpi:nth-child(2)::before { background: var(--accent-2); }
+  .kpi:nth-child(3)::before { background: #963cff; }
+  .kpi:nth-child(4)::before { background: #e90052; }
+  .kpi:nth-child(5)::before { background: var(--series-5); }
+
+  /* Cards get a faint purple lift off the page rather than a flat slab. */
+  .card, .kpi {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--brand-purple) 6%, transparent) 0%, transparent 90px),
+      var(--surface-1);
+  }
+
+  .medal { box-shadow: 0 0 0 1px rgba(0,0,0,0.18) inset; }
+
+  @media (max-width: 560px) {
+    header.top { padding: 15px 16px 17px; border-radius: 12px; }
+  }
 </style>
 </head>
 <body>
