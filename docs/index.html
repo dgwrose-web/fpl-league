@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<!-- Mini-League HQ · SITE VERSION 5 · Hall of Fame & Shame, split into two banded sections.
+     The version also prints in the page footer, so you can confirm at a glance
+     which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
@@ -181,6 +184,16 @@
 
   .cols2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }
   .cols3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px; }
+  /* Section banners splitting the page into its two halves. Fame carries the
+     brand green, Shame the magenta - the same signal used for negatives
+     everywhere else on the site. */
+  .hallband { margin: 30px 0 16px; padding: 13px 16px; border-radius: 12px;
+              border: 1px solid var(--border); border-left: 4px solid var(--accent);
+              background: color-mix(in srgb, var(--brand-purple) 16%, var(--surface-1)); }
+  .hallband:first-child { margin-top: 4px; }
+  .hallband h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.012em; }
+  .hallband p  { margin: 3px 0 0; color: var(--text-secondary); font-size: 12.5px; }
+  .hallband.shame { border-left-color: var(--critical); }
 
   .bracket { display:flex; gap:26px; overflow-x:auto; padding-bottom:8px; }
   .round { min-width: 235px; flex:none; }
@@ -261,9 +274,11 @@
     background: color-mix(in srgb, var(--accent) 9%, transparent) !important;
   }
   tr.me td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-  /* Keep the rank clear of that edge marker - applied to every row so the
-     column stays aligned above and below the prize cut. */
-  td.pos { padding-left: 10px; width: 44px; }
+  /* Keep the first column clear of that edge marker - applied to every row so
+     the column stays aligned above and below the highlighted one. Tables
+     without a rank column start with a name, which was getting clipped. */
+  td:first-child, th:first-child { padding-left: 10px; }
+  td.pos { width: 44px; }
 
   /* KPI tiles: a thin brand stripe, cycled in fixed order so a tile keeps its
      colour as the season goes on. */
@@ -288,6 +303,14 @@
 
   @media (max-width: 560px) {
     header.top { padding: 15px 16px 17px; border-radius: 12px; }
+  }
+
+  /* On a phone a six-column table is wider than the screen. Let the card
+     scroll sideways rather than the whole page, which otherwise shifts the
+     header and nav out of view too. */
+  @media (max-width: 760px) {
+    .card { overflow-x: auto; }
+    .card > table { min-width: 460px; }
   }
 </style>
 </head>
@@ -352,6 +375,10 @@ const fmtDateTime = iso => iso ? new Date(iso).toLocaleString('en-GB',
   {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '—';
 const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit',
               'wildcard':'Wildcard','manager':'Assistant Manager'};
+// Bumped whenever index.html changes. Printed in the footer so a glance at the
+// live site confirms which build is deployed - no view-source needed.
+const SITE_VERSION = '5';
+
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -511,7 +538,7 @@ function emptyState(big, small){
 }
 
 /* ============================================================ panels */
-const state = { tab:'overview', focus:null, raceMode:'one', month:null, cupRound:null };
+const state = { tab:'overview', focus:null, raceMode:'one', month:null, cupRound:null, hallScope:'season' };
 
 function render(tab, opts={}){
   if (tab) state.tab = tab;
@@ -728,46 +755,192 @@ function pSeason(host){
   }
 }
 
-/* ---------- hall of shame */
+/* ---------- hall of fame & shame */
+
+/* Each entry drives one table. Keeping them as data rather than seven
+   near-identical render functions means adding another is one line. */
+function hallTableSpecs(){
+  const t = (DATA.player_tables && DATA.player_tables.double_figure_threshold) || 10;
+  return [
+    {key:'disc',    title:'Disciplinary points', bad:true,
+     note:'Three for a red, one for a yellow — counted only while the player was in your side.',
+     cols:[{k:'disc',label:'Points'},{k:'yc',label:'Yellow'},{k:'rc',label:'Red'}]},
+    {key:'goals',   title:'Goals scored',
+     note:'Goals scored by players who were in your line-up at the time.',
+     cols:[{k:'goals',label:'Goals'}]},
+    {key:'assists', title:'Assists',
+     note:'The unselfish half of an attacking return.',
+     cols:[{k:'assists',label:'Assists'}]},
+    {key:'defcon',  title:'Defensive contribution',
+     note:'DEFCON points — two at a time, for defenders reaching ten actions and everyone further forward twelve.',
+     cols:[{k:'defcon',label:'Points'}]},
+    {key:'bonus',   title:'Bonus points',
+     note:'The BPS reward for being among the best on the pitch.',
+     cols:[{k:'bonus',label:'Bonus'}]},
+    {key:'dbl',     title:'Double-figure hauls',
+     note:`Individual players returning ${t} or more in a single gameweek.`,
+     cols:[{k:'dbl',label:'Hauls'}]},
+    {key:'hat',     title:'Hat-tricks',
+     note:'Three goals or more by one player in one gameweek.',
+     cols:[{k:'hat',label:'Hat-tricks'}]},
+  ];
+}
+
+/* Sum the compact per-gameweek arrays into one row per manager, either across
+   the whole season or for a single gameweek. */
+function hallRows(scope){
+  const pt = DATA.player_tables;
+  return pt.managers.map(m => {
+    const acc = {};
+    pt.keys.forEach(k => acc[k] = 0);
+    const gws = scope === 'season' ? Object.keys(m.per_gw) : [String(scope)];
+    gws.forEach(g => {
+      const arr = m.per_gw[g];
+      if (arr) pt.keys.forEach((k,i) => acc[k] += arr[i]);
+    });
+    return Object.assign({manager:m.manager, team:m.team}, acc);
+  });
+}
+
+function hallStatCard(spec, rows){
+  const ranked = rows.slice().sort((a,b) => b[spec.key] - a[spec.key]).slice(0, 8);
+  if (!ranked.length || ranked[0][spec.key] === 0) {
+    return card(spec.title, spec.note, emptyState('Nothing to report yet','No returns in this period.'));
+  }
+  const headers = ['Manager'].concat(spec.cols.map(c => ({label:c.label, num:true})));
+  return card(spec.title, spec.note, table(headers, ranked.map((r,i) =>
+    el('tr', {class: i === 0 ? 'me' : ''},
+      nameCell(r.manager, r.team),
+      spec.cols.map(c => el('td',{class:'num'},
+        el('span',{class: (spec.bad && c.k === spec.key && r[c.k] > 0) ? 'delta-dn' : ''},
+          String(r[c.k]))))))));
+}
+
+function hallPositionCard(rows){
+  const withTotal = rows.map(r => Object.assign({}, r,
+    {tot: r.p_gk + r.p_def + r.p_mid + r.p_fwd}));
+  withTotal.sort((a,b) => b.tot - a.tot);
+  if (!withTotal.length || withTotal[0].tot === 0) {
+    return card('Points by position', 'Where each manager is winning their points.',
+      emptyState('No points banked yet','This fills in once a gameweek is scored.'));
+  }
+  return card('Points by position',
+    'Where each manager is actually winning their points. Every manager, not just the top eight.',
+    table(['Manager',{label:'GK',num:true},{label:'DEF',num:true},{label:'MID',num:true},
+           {label:'FWD',num:true},{label:'Total',num:true}],
+      withTotal.map((r,i) => el('tr',{class: i === 0 ? 'me' : ''},
+        nameCell(r.manager, r.team),
+        el('td',{class:'num'}, String(r.p_gk)),
+        el('td',{class:'num'}, String(r.p_def)),
+        el('td',{class:'num'}, String(r.p_mid)),
+        el('td',{class:'num'}, String(r.p_fwd)),
+        el('td',{class:'num'}, el('strong',{}, String(r.tot)))))));
+}
+
+function hallBand(title, note, shame){
+  return el('div',{class: shame ? 'hallband shame' : 'hallband'},
+    el('h2',{}, title), note ? el('p',{}, note) : null);
+}
+
+function hallGrid(cls, cards){
+  const g = el('div',{class:cls});
+  cards.filter(Boolean).forEach(c => g.appendChild(c));
+  return g;
+}
+
 function pShame(host){
   const h = DATA.hall_of_shame;
-  if (!DATA.current_gw) return host.appendChild(card('Hall of Shame', null,
-    emptyState('Nobody has embarrassed themselves yet','Give it until Gameweek 1.')));
+  if (!DATA.current_gw) return host.appendChild(card('Hall of Fame & Shame', null,
+    emptyState('Nobody has covered themselves in glory or shame yet','Give it until Gameweek 1.')));
 
-  const grid = el('div',{class:'cols2'});
+  const pt = DATA.player_tables;
+  const specs = {};
+  hallTableSpecs().forEach(sp => specs[sp.key] = sp);
+  let rows = null;
 
-  grid.appendChild(card('Captaincy catastrophes',
+  /* The scope picker drives player tables in both halves of the page, so it
+     sits above the headings rather than inside either one. */
+  if (pt && pt.available) {
+    const gws = pt.gws.slice().sort((a,b) => b - a);
+    if (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope))) state.hallScope = 'season';
+
+    const picker = el('div',{class:'controls'},
+      el('label',{class:'sub', for:'hallScope'}, 'Showing'),
+      el('select',{id:'hallScope', onchange:e => { state.hallScope = e.target.value; render('shame'); }},
+        el('option',{value:'season', ...(state.hallScope === 'season' ? {selected:'selected'} : {})},
+           'Season to date'),
+        gws.map(g => el('option',{value:String(g),
+          ...(String(state.hallScope) === String(g) ? {selected:'selected'} : {})}, 'Gameweek ' + g))));
+
+    const scopeNote = (pt.scope === 'all_15'
+      ? 'Counting all fifteen squad members.'
+      : 'Counting only players who actually lined up for you, auto-subs included.')
+      + ' Applies to the player tables in both halves below.';
+    host.appendChild(card('Player honours', scopeNote, picker));
+    rows = hallRows(state.hallScope);
+  }
+
+  const statCard = k => {
+    if (!rows) return null;
+    if (k === 'defcon' && pt.defcon && pt.defcon.mode === 'unavailable') {
+      return card(specs[k].title, specs[k].note,
+        emptyState('Not available from the API','FPL is not currently publishing defensive contribution data.'));
+    }
+    return hallStatCard(specs[k], rows);
+  };
+
+  /* ================= Hall of Fame ================= */
+  host.appendChild(hallBand('Hall of Fame',
+    'Where the points came from, and who your players did it for.'));
+
+  if (rows) {
+    host.appendChild(hallPositionCard(rows));
+    host.appendChild(hallGrid('cols3', ['goals','hat','assists'].map(statCard)));
+    host.appendChild(hallGrid('cols3', ['dbl','bonus','defcon'].map(statCard)));
+  } else {
+    host.appendChild(card('Player honours', null,
+      emptyState('No player data yet','These tables fill in once a gameweek has been scored.')));
+  }
+
+  /* ================= Hall of Shame ================= */
+  host.appendChild(hallBand('Hall of Shame',
+    'Cards, hits, and decisions best not dwelt upon.', true));
+
+  const hitsCard = card('Most points burned on hits',
+    'Every −4 tells a story. Rarely a happy one.',
+    h.hits_season.length && h.hits_season[0].points ?
+      table(['Manager',{label:'Points lost',num:true}],
+        h.hits_season.map(b => el('tr',{}, nameCell(b.manager,b.team),
+          el('td',{class:'num'}, el('span',{class:'delta-dn'}, '−'+b.points)))))
+      : emptyState('Nobody has taken a hit','Either great patience or total apathy.'));
+
+  host.appendChild(hallGrid('cols2', [statCard('disc'), hitsCard]));
+
+  const captains = card('Captaincy catastrophes',
     'The armband handed to a player who then did nothing at all.',
     h.captain_flops.length ? table(['GW','Manager','Captain',{label:'Scored',num:true}],
       h.captain_flops.map(f => el('tr',{},
         el('td',{class:'pos'}, 'GW'+f.gw), nameCell(f.manager, f.team),
         el('td',{}, f.player),
         el('td',{class:'num'}, el('span',{class: f.points<=2?'delta-dn':''}, String(f.points))))))
-      : emptyState('No disasters yet','Remarkably sensible captaincy all round.')));
+      : emptyState('No disasters yet','Remarkably sensible captaincy all round.'));
 
-  grid.appendChild(card('Bench disasters',
+  const bench = card('Bench disasters',
     'Points that sat and watched. Eight or more in a single gameweek.',
     h.bench_disasters.length ? table(['GW','Manager',{label:'Left on bench',num:true}],
       h.bench_disasters.map(b => el('tr',{},
         el('td',{class:'pos'},'GW'+b.gw), nameCell(b.manager,b.team),
         el('td',{class:'num'}, String(b.points)))))
-      : emptyState('Nothing wasted yet','Suspiciously good squad management.')));
+      : emptyState('Nothing wasted yet','Suspiciously good squad management.'));
 
-  grid.appendChild(card('Season-long bench waste',
+  const benchSeason = card('Season-long bench waste',
     'Cumulative points left in the dugout.',
     h.bench_season.length ? table(['Manager',{label:'Points',num:true}],
       h.bench_season.map(b => el('tr',{}, nameCell(b.manager,b.team),
-        el('td',{class:'num'}, String(b.points))))) : null));
+        el('td',{class:'num'}, String(b.points)))))
+      : emptyState('Nothing wasted yet','Nobody has left anything behind.'));
 
-  grid.appendChild(card('Most points burned on hits',
-    'Every −4 tells a story. Rarely a happy one.',
-    h.hits_season.length && h.hits_season[0].points ?
-      table(['Manager',{label:'Points lost',num:true}],
-        h.hits_season.map(b => el('tr',{}, nameCell(b.manager,b.team),
-          el('td',{class:'num'}, el('span',{class:'delta-dn'}, '−'+b.points)))))
-      : emptyState('Nobody has taken a hit','Either great patience or total apathy.')));
-
-  host.appendChild(grid);
+  host.appendChild(hallGrid('cols3', [captains, bench, benchSeason]));
 }
 
 /* ---------- squads */
@@ -1034,7 +1207,7 @@ function buildEmailHTML(){
   }
   const hs = d.hall_of_shame;
   if (hs && hs.bench_season && hs.bench_season.length){
-    h += tbl('Hall of shame', ['Award','Recipient','Damage'], [
+    h += tbl('Hall of Fame & Shame', ['Award','Recipient','Damage'], [
       ['Most points left on the bench',
        `<strong>${esc(hs.bench_season[0].manager)}</strong>`, hs.bench_season[0].points + ' pts'],
       ...(hs.captain_flops.length ? [['Worst captain call',
@@ -1055,7 +1228,7 @@ function buildEmailHTML(){
       p.running_totals.map(r => [`<strong>${esc(r.manager)}</strong>`, p.currency + r.amount]));
   }
 
-  h += `<p style="color:#898781;font-size:12.5px;margin-top:26px">Full tables, charts and the hall of shame: <a href="${location.href.split('#')[0]}">${esc(location.host + location.pathname)}</a></p>`;
+  h += `<p style="color:#898781;font-size:12.5px;margin-top:26px">Full tables, charts and the Hall of Fame &amp; Shame: <a href="${location.href.split('#')[0]}">${esc(location.host + location.pathname)}</a></p>`;
   return h + '</div>';
 }
 
@@ -1095,7 +1268,7 @@ function pEmail(host){
 
 /* ============================================================ boot */
 const TABS = [['overview','Overview'],['month','Manager of the Month'],['season','Season table'],
-              ['shame','Hall of Shame'],['squads','Squads'],['cup','Cup'],
+              ['shame','Hall of Fame & Shame'],['squads','Squads'],['cup','Cup'],
               ['prizes','Prize pot'],['email','Email round-up']];
 
 function initTheme(){
@@ -1127,7 +1300,8 @@ function start(data){
   else bits.push('season starts soon');
   $('#leagueSub').textContent = bits.join(' · ');
   $('#stamp').textContent = 'Updated ' + new Date(data.generated_at)
-    .toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    .toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+    + ' · site v' + SITE_VERSION;
   const nav = $('#tabs');
   TABS.forEach(([k,label]) => nav.appendChild(
     el('button',{type:'button', role:'tab', 'data-tab':k, onclick:()=>render(k)}, label)));
