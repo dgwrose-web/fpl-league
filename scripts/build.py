@@ -800,11 +800,63 @@ def auto_commentary(month, managers, boot, hall, diffs, basis) -> dict:
 
 # ------------------------------------------------------------------- entry
 
+# ------------------------------------------------------------------- guard
+
+def guard_against_previous(new: dict, prev_path: Path) -> list[str]:
+    """Refuse to publish data that looks broken next to what is already live.
+
+    A build that fails writes nothing, so the site keeps serving the last good
+    file. A stale site is recoverable; a site showing everyone on zero points
+    the morning after a gameweek is the kind of thing a league remembers.
+
+    These are deliberately loose - they catch collapse, not wobble. FPL does
+    make small retrospective corrections, and managers do occasionally leave a
+    mini-league, so the thresholds allow for both.
+    """
+    problems: list[str] = []
+
+    for key in ("league", "managers", "months", "current_gw", "generated_at"):
+        if key not in new:
+            problems.append(f"missing top-level key: {key}")
+    if not new.get("managers"):
+        problems.append("no managers at all in the new data")
+    if problems or not prev_path.exists():
+        return problems
+
+    try:
+        prev = json.loads(prev_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return problems      # an unreadable previous file is not a reason to block
+
+    was_size = (prev.get("league") or {}).get("size") or 0
+    now_size = (new.get("league") or {}).get("size") or 0
+    if was_size and now_size < was_size * 0.75:
+        problems.append(f"league size collapsed: {was_size} managers -> {now_size}")
+
+    if new.get("current_gw", 0) < prev.get("current_gw", 0):
+        problems.append(f"current gameweek went backwards: "
+                        f"{prev.get('current_gw')} -> {new.get('current_gw')}")
+
+    before = {m.get("entry"): m.get("total", 0) for m in prev.get("managers", [])}
+    fell = [f"{m.get('manager')} {before[m['entry']]}->{m.get('total', 0)}"
+            for m in new.get("managers", [])
+            if m.get("entry") in before and m.get("total", 0) < before[m["entry"]] - 10]
+    if fell:
+        problems.append("season totals fell by more than 10: " + "; ".join(fell[:5])
+                        + (f" (and {len(fell) - 5} more)" if len(fell) > 5 else ""))
+
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=str(ROOT / "config.json"))
     ap.add_argument("--out", default=str(ROOT / "docs" / "data.json"))
     ap.add_argument("--offline", help="directory of canned API responses (testing)")
+    ap.add_argument("--no-guard", action="store_true",
+                    help="write even if the new data looks broken next to the current file")
+    ap.add_argument("--always-write", action="store_true",
+                    help="rewrite even when nothing but the build timestamp changed")
     args = ap.parse_args()
 
     config = json.loads(Path(args.config).read_text())
@@ -812,6 +864,38 @@ def main() -> int:
     data = build(config, client)
 
     out = Path(args.out)
+
+    # Netlify's free tier bills per production deploy, so a deploy triggered by
+    # nothing but a changed timestamp is pure waste - and there are a lot of
+    # days in a season when no football has been played. Compare everything
+    # EXCEPT generated_at; if the football has not moved, leave the file alone
+    # and let the workflow find nothing to commit.
+    if not args.always_write and out.exists():
+        try:
+            previous = json.loads(out.read_text())
+        except (OSError, json.JSONDecodeError):
+            previous = None
+        if previous is not None:
+            def without_stamp(d: dict) -> str:
+                trimmed = {k: v for k, v in d.items() if k != "generated_at"}
+                return json.dumps(trimmed, sort_keys=True, separators=(",", ":"))
+            if without_stamp(previous) == without_stamp(data):
+                print(f"league   : {data['league']['name']} ({data['league']['size']} managers)")
+                print(f"gameweek : {data['current_gw']}")
+                print(f"requests : {client.requests_made} live, {client.cache_hits} cached")
+                print("no change: the data is identical to the live file - nothing written,")
+                print(f"           so no commit and no deploy. Last change {previous.get('generated_at')}.")
+                return 0
+
+    problems = [] if args.no_guard else guard_against_previous(data, out)
+    if problems:
+        print("REFUSING TO WRITE - the new data looks wrong:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        print("Nothing was written. The site keeps the last good data.", file=sys.stderr)
+        print("If this is genuinely correct, re-run with --no-guard.", file=sys.stderr)
+        return 2
+
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")))
 
