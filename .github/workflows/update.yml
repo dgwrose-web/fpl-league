@@ -16,6 +16,13 @@ on:
 permissions:
   contents: write
 
+# Two runs committing data.json at the same time is what caused the rebase
+# conflict. Queue them instead of letting them race - the second waits rather
+# than fighting the first for the same file.
+concurrency:
+  group: refresh-league-data
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,21 +43,39 @@ jobs:
       - name: Build data.json
         run: python3 scripts/build.py
 
+      # data.json is generated, never hand-edited, so there is no such thing as
+      # a meaningful merge conflict in it - the freshly built copy always wins.
+      # Rather than rebase (which can leave the checkout mid-conflict on a
+      # detached HEAD), align hard to the remote and lay the new file on top.
+      # If someone pushes while we work, the retry simply repeats that.
       - name: Commit refreshed data
         run: |
-          set -x
+          set -euo pipefail
           if [ ! -f docs/data.json ]; then
             echo "::error::build.py did not produce docs/data.json"
             ls -R docs scripts || true
             exit 1
           fi
+          cp docs/data.json "$RUNNER_TEMP/data.json"
           git config user.name  "league-bot"
           git config user.email "league-bot@users.noreply.github.com"
-          git add -f docs/data.json
-          if git diff --staged --quiet; then
-            echo "No change since last run - nothing to commit."
-            exit 0
-          fi
-          git commit -m "Refresh league data ($(date -u '+%Y-%m-%d %H:%M UTC'))"
-          git pull --rebase --autostash origin main || true
-          git push
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -f -B main origin/main   # -f: discard the stale copy in the tree
+            cp "$RUNNER_TEMP/data.json" docs/data.json
+            git add -f docs/data.json
+            if git diff --staged --quiet; then
+              echo "No change since last run - nothing to commit."
+              exit 0
+            fi
+            git commit -m "Refresh league data ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+            if git push origin main; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected - someone else pushed first. Retrying."
+            sleep 5
+          done
+          echo "::error::Could not push after 3 attempts."
+          exit 1
