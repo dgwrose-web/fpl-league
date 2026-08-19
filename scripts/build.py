@@ -132,6 +132,136 @@ def build_months(events: list[dict], fixtures: list[dict], overrides: dict) -> l
     return months
 
 
+# ------------------------------------------------- per-player attribution
+
+# Compact row format: one array per manager per gameweek, in this order. Arrays
+# rather than objects because 20 managers x 38 gameweeks of named keys would
+# quadruple the size of data.json for no benefit - the page maps them back.
+STAT_KEYS = ["disc", "yc", "rc", "goals", "assists", "defcon", "bonus",
+             "dbl", "hat", "p_gk", "p_def", "p_mid", "p_fwd"]
+
+POS_SLOT = {1: "p_gk", 2: "p_def", 3: "p_mid", 4: "p_fwd"}
+
+
+def _defcon_raw(stats: dict):
+    """Return (value, source_key) for defensive contribution, or (None, None).
+
+    FPL added Defensive Contribution in 2025/26 and the API field has moved
+    once already, so try the known spellings and fall back to summing the
+    component actions. Better a derived number than a silently empty table.
+    """
+    for k in ("defensive_contribution", "defensive_contributions", "defcon"):
+        v = stats.get(k)
+        if v is not None:
+            return float(v), k
+    total, seen = 0.0, False
+    for k in ("clearances_blocks_interceptions", "tackles", "recoveries"):
+        v = stats.get(k)
+        if v is not None:
+            total += float(v)
+            seen = True
+    return (total, "derived") if seen else (None, None)
+
+
+def build_player_tables(managers: list[dict], picks_by_gw: dict, live_stats: dict,
+                        elements: dict, config: dict) -> dict:
+    """Attribute individual player performances to the manager who owned them.
+
+    By default only players who actually lined up count: `multiplier > 0` means
+    "this player counted for you", and because FPL rewrites the multiplier once
+    auto-subs are applied, substitutes are handled for free. A red card on
+    someone's bench cost them nothing, so it shouldn't be held against them -
+    but `squad_scope: "all_15"` in config.json switches that round.
+    """
+    hcfg = (config.get("hall") or {})
+    scope_all = str(hcfg.get("squad_scope", "starting_xi")).lower() in ("all_15", "all", "squad")
+    use_mult = bool(hcfg.get("captain_multiplier", False))
+    threshold = int(hcfg.get("double_figure_threshold", 10))
+
+    # Is the API giving us DEFCON points (0 or 2) or a raw count of actions?
+    # Decide once from the season's spread rather than guessing per player.
+    seen_vals, field = [], None
+    for gw_stats in live_stats.values():
+        for st in gw_stats.values():
+            v, k = _defcon_raw(st)
+            if v is not None:
+                seen_vals.append(v)
+                field = field or k
+    if not seen_vals:
+        mode = "unavailable"
+    elif max(seen_vals) <= 3:
+        mode = "points"
+    else:
+        mode = "count"
+
+    def defcon_points(st: dict, etype: int) -> int:
+        if mode == "unavailable" or etype == 1:
+            return 0
+        v, _ = _defcon_raw(st)
+        if v is None:
+            return 0
+        if mode == "points":
+            return int(v)
+        return 2 if v >= (10 if etype == 2 else 12) else 0
+
+    rows = []
+    for m in managers:
+        entry_id = m["entry"]
+        per_gw: dict[str, list[int]] = {}
+        for gw, by_entry in picks_by_gw.items():
+            pick_set = by_entry.get(entry_id)
+            gw_stats = live_stats.get(gw)
+            if not pick_set or not gw_stats:
+                continue
+            acc = dict.fromkeys(STAT_KEYS, 0)
+            for p in pick_set.get("picks", []) or []:
+                mult = p.get("multiplier", 0) or 0
+                if not scope_all and mult <= 0:
+                    continue
+                st = gw_stats.get(p["element"])
+                if not st:
+                    continue
+                etype = (elements.get(p["element"]) or {}).get("element_type", 0)
+                # Counts (goals, cards) are never multiplied - you cannot score
+                # one and a half goals. Only points-shaped stats can double.
+                w = mult if (use_mult and mult > 0) else 1
+
+                yellow = int(st.get("yellow_cards", 0) or 0)
+                red = int(st.get("red_cards", 0) or 0)
+                goals = int(st.get("goals_scored", 0) or 0)
+                points = int(st.get("total_points", 0) or 0)
+
+                acc["yc"] += yellow
+                acc["rc"] += red
+                acc["disc"] += yellow + red * 3
+                acc["goals"] += goals
+                acc["assists"] += int(st.get("assists", 0) or 0)
+                acc["bonus"] += int(st.get("bonus", 0) or 0) * w
+                acc["defcon"] += defcon_points(st, etype) * w
+                if goals >= 3:
+                    acc["hat"] += 1
+                if points >= threshold:
+                    acc["dbl"] += 1
+                slot = POS_SLOT.get(etype)
+                if slot:
+                    acc[slot] += points * w
+            if any(acc.values()):
+                per_gw[str(gw)] = [acc[k] for k in STAT_KEYS]
+        rows.append({"entry": entry_id, "manager": m["manager"],
+                     "team": m["team"], "per_gw": per_gw})
+
+    return {
+        "available": any(r["per_gw"] for r in rows),
+        "keys": STAT_KEYS,
+        "gws": sorted({int(g) for r in rows for g in r["per_gw"]}),
+        "scope": "all_15" if scope_all else "starting_xi",
+        "captain_multiplier": use_mult,
+        "double_figure_threshold": threshold,
+        "defcon": {"mode": mode, "field": field},
+        "managers": rows,
+    }
+
+
 # ----------------------------------------------------------------- main build
 
 def build(config: dict, client: FPLClient) -> dict:
@@ -173,10 +303,12 @@ def build(config: dict, client: FPLClient) -> dict:
 
     # ----- live element points per finished gameweek (for captain scoring)
     live_points: dict[int, dict[int, int]] = {}
+    live_stats: dict[int, dict[int, dict]] = {}
     for gw in finished_gws:
         data = client.live(gw, finished=True)
         if data:
-            live_points[gw] = {el["id"]: el["stats"]["total_points"] for el in data.get("elements", [])}
+            live_stats[gw] = {el["id"]: (el.get("stats") or {}) for el in data.get("elements", [])}
+            live_points[gw] = {eid: st.get("total_points", 0) for eid, st in live_stats[gw].items()}
 
     # ----- per-manager history and picks
     managers: list[dict] = []
@@ -294,6 +426,9 @@ def build(config: dict, client: FPLClient) -> dict:
 
     published = [m for m in months if m["complete"]]
     latest_month = published[-1] if published else None
+
+    player_tables = build_player_tables(managers, picks_by_gw, live_stats,
+                                       elements, config)
 
     # ----- hall of shame (season-long, plus latest month)
     def top_of(seq, key, n=5, reverse=True):
@@ -414,6 +549,7 @@ def build(config: dict, client: FPLClient) -> dict:
         "top5": [{"entry": m["entry"], "manager": m["manager"], "team": m["team"],
                   "total": m["total"], "rank": m["rank"]} for m in top5],
         "hall_of_shame": hall,
+        "player_tables": player_tables,
         "differentials": differentials,
         "cup": cup,
         "prizes": prizes,
