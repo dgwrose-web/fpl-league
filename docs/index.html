@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 5 · Hall of Fame & Shame, split into two banded sections.
+<!-- Mini-League HQ · SITE VERSION 6 · Manager names link to their FPL team.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -130,6 +130,12 @@
   td.pos { color: var(--muted); font-variant-numeric: tabular-nums; width: 34px; }
   .who { font-weight: 600; }
   .teamname { color: var(--muted); font-size: 12.5px; }
+  /* Manager names linking out to their FPL squad. Underline only on hover so a
+     table of 37 links does not read as a wall of blue. */
+  a.mlink { color: inherit; text-decoration: none; display: block; }
+  a.mlink:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  a.mlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  @media print { a.mlink { color: inherit; text-decoration: none; } }
   tr.me td { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
 
   .medal { display:inline-flex; align-items:center; justify-content:center;
@@ -377,7 +383,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '5';
+const SITE_VERSION = '6';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -516,8 +522,23 @@ function medal(rank){
   if (rank>3) return el('span',{class:'pos'}, String(rank));
   return el('span',{class:`medal m${rank}`}, String(rank));
 }
-function nameCell(manager, team){
-  return el('td',{}, el('div',{class:'who'}, manager), el('div',{class:'teamname'}, team));
+/* A manager's own FPL page. Mid-season the gameweek view is the interesting
+   one - it shows the actual eleven they picked - but that URL does not exist
+   before a gameweek has been scored, so fall back to their season history. */
+function fplTeamUrl(entry){
+  const gw = DATA.current_gw;
+  return gw ? `https://fantasy.premierleague.com/entry/${entry}/event/${gw}`
+            : `https://fantasy.premierleague.com/entry/${entry}/history`;
+}
+
+/* Pass an entry id to make the name a link. The Hall of Fame & Shame tables
+   deliberately do not, so they stay plain text. */
+function nameCell(manager, team, entry){
+  const name = entry
+    ? el('a',{class:'who mlink', href:fplTeamUrl(entry), target:'_blank',
+              rel:'noopener noreferrer', title:`${manager} on the FPL site`}, manager)
+    : el('div',{class:'who'}, manager);
+  return el('td',{}, name, el('div',{class:'teamname'}, team));
 }
 function table(headers, rows){
   const t = el('table');
@@ -624,7 +645,7 @@ function pOverview(host){
       const mv = m.last_rank && m.rank ? m.last_rank - m.rank : 0;
       return el('tr',{},
         el('td',{class:'pos'}, medal(t.rank)),
-        nameCell(t.manager, t.team),
+        nameCell(t.manager, t.team, t.entry),
         el('td',{class:'num'}, mv===0?'–':el('span',{class: mv>0?'delta-up':'delta-dn'},
           (mv>0?'▲ ':'▼ ')+Math.abs(mv))),
         el('td',{class:'num'}, String(t.total)));
@@ -696,7 +717,7 @@ function pMonth(host){
 
   const rows = mo.table.map(r => el('tr',{},
     el('td',{class:'pos'}, medal(r.rank)),
-    nameCell(r.manager, r.team),
+    nameCell(r.manager, r.team, r.entry),
     el('td',{class:'num'}, String(r.gross)),
     el('td',{class:'num'}, r.hits ? el('span',{class:'delta-dn'}, '−'+r.hits) : '0'),
     el('td',{class:'num'}, String(r.net)),
@@ -712,7 +733,7 @@ function pMonth(host){
       table(['Month','Winner',{label:'Points',num:true},'Gameweeks'],
         won.map(m => el('tr',{},
           el('td',{}, m.label),
-          nameCell(m.winner.manager, m.winner.team),
+          nameCell(m.winner.manager, m.winner.team, m.winner.entry),
           el('td',{class:'num'}, String(m.winner[d.basis])),
           el('td',{}, 'GW ' + m.gws.join(', ')))))));
   }
@@ -729,7 +750,7 @@ function pSeason(host){
     const last = m.history[m.history.length-1];
     return el('tr',{class: m.rank<=5 ? 'me':''},
       el('td',{class:'pos'}, medal(m.rank)),
-      nameCell(m.manager, m.team),
+      nameCell(m.manager, m.team, m.entry),
       el('td',{class:'num'}, mv===0?'–':el('span',{class:mv>0?'delta-up':'delta-dn'},
         (mv>0?'▲ ':'▼ ')+Math.abs(mv))),
       el('td',{class:'num'}, last ? String(last.net) : '–'),
@@ -749,7 +770,7 @@ function pSeason(host){
   if (chips.length){
     host.appendChild(card('Chips played', 'Who has burned what, and when.',
       table(['Manager','Chips used'], chips.map(m => el('tr',{},
-        nameCell(m.manager, m.team),
+        nameCell(m.manager, m.team, m.entry),
         el('td',{}, m.chips_used.map(c =>
           el('span',{class:'pill'}, `${CHIP[c.name]||c.name} · GW${c.gw}`))))))));
   }
@@ -1056,8 +1077,13 @@ function pCup(host){
   c.rounds.forEach(r => {
     const col = el('div',{class:'round'}, el('h3',{}, `${r.label} · GW${r.event}`));
     r.matches.forEach(m => {
+      // A future round shows "TBC" until the draw is made, and a bye has no
+      // entry either - both fall back to plain text rather than a dead link.
       const side = (s, won) => el('div',{class:'side '+(won?'win':'lose')},
-        el('span',{}, s.manager || s.team || 'TBC'),
+        (s && s.entry)
+          ? el('a',{class:'mlink', href:fplTeamUrl(s.entry), target:'_blank',
+                    rel:'noopener noreferrer'}, s.manager || s.team || 'TBC')
+          : el('span',{}, (s && (s.manager || s.team)) || 'TBC'),
         el('span',{class:'pts'}, s.points ?? '–'));
       col.appendChild(el('div',{class:'tie'},
         side(m.home, m.winner===m.home.entry),
@@ -1141,7 +1167,7 @@ function pPrizes(host){
     `${money(p.motm_value)} per month across ${p.months_total} months.`,
     p.month_awards.length ? table(['Month','Winner',{label:'Prize',num:true}],
       p.month_awards.map(a => el('tr',{}, el('td',{},a.month),
-        nameCell(a.manager, a.team), el('td',{class:'num'}, money(a.amount)))))
+        nameCell(a.manager, a.team, a.entry), el('td',{class:'num'}, money(a.amount)))))
       : emptyState('No months completed','The first award lands at the end of the opening month.')));
 
   grid.appendChild(card('Running totals', 'Who is up, before anyone has actually paid.',
