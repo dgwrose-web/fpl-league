@@ -9,15 +9,15 @@
   "prize_pot": {
     "currency": "£",
     "entry_fee": 50,
-    "manager_of_the_month": 0,
-    "cup_winner": 0,
-    "cup_runner_up": 0,
+    "manager_of_the_month": 25
+    "cup_winner": 125,
+    "cup_runner_up": 75,
     "season": {
-      "1st": 0,
-      "2nd": 0,
-      "3rd": 0,
-      "4th": 0,
-      "5th": 0
+      "1st": 700,
+      "2nd": 450,
+      "3rd": 300,
+      "4th": 200,
+      "5th": 100
     }
   },
 
