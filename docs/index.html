@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 8 · Pot total hidden; sponsored-voucher note on season prizes.
+<!-- Mini-League HQ · SITE VERSION 7 · Sponsor lockup in the masthead.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -310,15 +310,6 @@
   /* Sponsor lockup in the masthead. The logo is navy on transparent, which
      would vanish against the purple, so it sits on a white plate - that also
      keeps the brand colours correct rather than recolouring someone's logo. */
-  /* Prize-page note about the sponsored vouchers. Given it concerns money, it
-     gets a marker rather than sitting in the grey small print. */
-  .sponsor-note {
-    margin: 0 0 14px; padding: 9px 12px; border-radius: 8px;
-    border-left: 3px solid var(--accent);
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
-    color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;
-  }
-
   .sponsor { display: flex; align-items: center; gap: 10px; align-self: center; }
   .sponsor-label {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em;
@@ -426,7 +417,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '8';
+const SITE_VERSION = '7';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1187,14 +1178,11 @@ function pPrizes(host){
     const k = (l,v,m)=>kpis.appendChild(el('div',{class:'kpi'},
       el('div',{class:'label'},l), el('div',{class:'value'},v),
       m?el('div',{class:'meta'},m):''));
-    // The pot total is deliberately not shown - this page is public to the
-    // whole league. Allocated and paid-out are what people actually want.
-    k('Total prizes', money(p.committed), `Across ${DATA.league.size} managers`);
+    k('Pot collected', money(p.collected), `${money(p.entry_fee)} × ${DATA.league.size} managers`);
+    k('Allocated', money(p.committed),
+      p.unallocated ? money(Math.abs(p.unallocated)) + (p.unallocated>0?' unallocated':' over-allocated') : 'Fully allocated');
     k('Paid out so far', money(p.month_awards.reduce((a,b)=>a+b.amount,0)),
       `${p.month_awards.length} monthly award${p.month_awards.length===1?'':'s'}`);
-    if (p.unallocated < 0) {
-      k('Over-allocated', money(Math.abs(p.unallocated)), 'More promised than collected');
-    }
     host.appendChild(kpis);
   }
 
@@ -1206,8 +1194,6 @@ function pPrizes(host){
       el('td',{class:'num'}, money(v)));
   });
   host.appendChild(card('Season prizes', 'Awarded on final standings after Gameweek 38.',
-    el('p',{class:'sponsor-note'},
-      'Part of the prize for the top three is paid as Amazon vouchers, sponsored by Park Place Technologies.'),
     table(['#','Currently held by',{label:'Prize',num:true}], seasonRows)));
 
   const grid = el('div',{class:'cols2'});
