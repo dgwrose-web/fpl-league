@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 10 · Email round-up tables rendered as images.
+<!-- Mini-League HQ · SITE VERSION 11 · Squads by gameweek, compare mode on the race chart.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -292,6 +292,17 @@
   td:first-child, th:first-child { padding-left: 10px; }
   td.pos { width: 44px; }
 
+  /* Sortable headers. The arrow is always present but faint until used, so the
+     affordance is visible without 8 bright arrows shouting at once. */
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text-primary); }
+  th.sortable::after {
+    content: '\2195'; margin-left: 5px; font-size: 9px; opacity: .3;
+  }
+  th.sortable[aria-sort="ascending"]::after  { content: '\25B2'; opacity: 1; color: var(--accent); }
+  th.sortable[aria-sort="descending"]::after { content: '\25BC'; opacity: 1; color: var(--accent); }
+  th.sortable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
   /* KPI tiles: a thin brand stripe, cycled in fixed order so a tile keeps its
      colour as the season goes on. */
   .kpi { position: relative; overflow: hidden; }
@@ -324,6 +335,21 @@
     background: color-mix(in srgb, var(--accent) 8%, transparent);
     color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;
   }
+
+  /* Chips for the managers picked out on the race chart. The dot carries the
+     same colour as that manager's line, so the chart needs no separate key. */
+  .pickchip {
+    display:inline-flex; align-items:center; gap:7px;
+    padding:4px 6px 4px 9px; border-radius:999px; font-size:12.5px;
+    border:1px solid var(--border); background: var(--surface-1);
+    color: var(--text-primary);
+  }
+  .pickchip .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .pickchip button {
+    border:none; background:none; cursor:pointer; font-size:15px; line-height:1;
+    padding:0 4px; color: var(--muted); font-family:inherit;
+  }
+  .pickchip button:hover { color: var(--critical); }
 
   .sponsor { display: flex; align-items: center; gap: 10px; align-self: center; }
   .sponsor-label {
@@ -432,7 +458,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '10';
+const SITE_VERSION = '11';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -495,6 +521,14 @@ function rankRace(container, mode, focusEntry) {
   if (mode === 'top5') {
     mgrs.slice().sort((a,b)=>b.total-a.total).slice(0,5)
         .forEach((m,i)=> highlight.push({m, color: cssv(SERIES[i])}));
+  } else if (mode === 'pick') {
+    // Capped at five because there are five validated line colours; a sixth
+    // would have to repeat one, and two managers sharing a colour on a chart
+    // this busy is worse than not drawing them.
+    (state.picks || []).slice(0, SERIES.length).forEach((entry, i) => {
+      const m = mgrs.find(x => x.entry === entry);
+      if (m) highlight.push({m, color: cssv(SERIES[i])});
+    });
   } else {
     const f = mgrs.find(m=>m.entry===focusEntry) || mgrs.slice().sort((a,b)=>b.total-a.total)[0];
     if (f) highlight.push({m:f, color: cssv('--series-1')});
@@ -589,12 +623,69 @@ function nameCell(manager, team, entry){
     : el('div',{class:'who'}, manager);
   return el('td',{}, name, el('div',{class:'teamname'}, team));
 }
+/* Read a cell as something sortable.
+
+   Movement arrows carry the sign - "▲ 2" is +2 and "▼ 2" is -2 - so sorting by
+   the Move column ranks the biggest climbers above the biggest fallers rather
+   than lumping all the 2s together. Currency, percentages and minus signs are
+   stripped to their number; a dash counts as zero; anything else sorts as text. */
+function cellSortValue(td){
+  const raw = (td && td.textContent || '').trim();
+  if (!raw || /^[–—-]$/.test(raw)) return 0;
+  const s = raw.replace(/▲/g,'+').replace(/▼/g,'-')
+               .replace(/[−–]/g,'-').replace(/[^0-9.+-]/g,'');
+  const n = parseFloat(s);
+  return isNaN(n) ? raw.toLowerCase() : n;
+}
+
+/* Click a header to sort; click again to reverse; a third time restores the
+   original order. Whole rows move, so the rank in the first column travels with
+   its manager - sorting by Move never renumbers the league. */
+function sortTable(t, col, th){
+  const tb = t.querySelector('tbody');
+  const rows = [...tb.rows];
+  const sample = rows.map(r => cellSortValue(r.cells[col])).find(v => v !== 0);
+  const numeric = typeof (sample === undefined ? 0 : sample) === 'number';
+
+  const stage = th.dataset.sort === 'none' || !th.dataset.sort ? 'a'
+              : th.dataset.sort === 'a' ? 'b' : 'none';
+  t.querySelectorAll('thead th').forEach(h => {
+    h.dataset.sort = 'none'; h.setAttribute('aria-sort','none');
+  });
+  th.dataset.sort = stage;
+
+  if (stage === 'none'){
+    (t._rows || rows).forEach(r => tb.appendChild(r));
+    return;
+  }
+  // Numbers open on the biggest first, names on A-Z - the useful direction in
+  // each case, so the common question is answered in one click.
+  const dir = numeric ? (stage === 'a' ? -1 : 1) : (stage === 'a' ? 1 : -1);
+  th.setAttribute('aria-sort', dir === 1 ? 'ascending' : 'descending');
+  rows.sort((x,y) => {
+    const a = cellSortValue(x.cells[col]), b = cellSortValue(y.cells[col]);
+    if (typeof a === 'number' && typeof b === 'number') return (a - b) * dir;
+    return String(a).localeCompare(String(b)) * dir;
+  }).forEach(r => tb.appendChild(r));
+}
+
 function table(headers, rows){
   const t = el('table');
   const thead = el('thead'); const tr = el('tr');
-  headers.forEach(h => tr.appendChild(el('th',{class: h.num?'num':''}, h.label ?? h)));
+  headers.forEach((h,i) => {
+    const th = el('th',{class:(h.num?'num ':'')+'sortable', tabindex:'0',
+                        'aria-sort':'none', 'data-sort':'none',
+                        title:'Click to sort'}, h.label ?? h);
+    const go = () => sortTable(t, i, th);
+    th.addEventListener('click', go);
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); }
+    });
+    tr.appendChild(th);
+  });
   thead.appendChild(tr); t.appendChild(thead);
   const tb = el('tbody'); rows.forEach(r => tb.appendChild(r)); t.appendChild(tb);
+  t._rows = rows.slice();          // to restore the original order
   return t;
 }
 function card(title, note, ...body){
@@ -608,7 +699,8 @@ function emptyState(big, small){
 }
 
 /* ============================================================ panels */
-const state = { tab:'overview', focus:null, raceMode:'one', month:null, cupRound:null, hallScope:'season' };
+const state = { tab:'overview', focus:null, raceMode:'one', picks:[], month:null,
+                cupRound:null, hallScope:null, squadScope:null };
 
 function render(tab, opts={}){
   if (tab) state.tab = tab;
@@ -666,22 +758,46 @@ function pOverview(host){
   // rank race
   const ctrl = el('div',{class:'controls'});
   const seg = el('div',{class:'seg'});
-  [['one','Highlight one'],['top5','Top 5']].forEach(([k,lbl])=>{
+  [['one','Highlight one'],['top5','Top 5'],['pick','Compare']].forEach(([k,lbl])=>{
     seg.appendChild(el('button',{type:'button','aria-pressed':String(state.raceMode===k),
       onclick:()=>render('overview',{raceMode:k})}, lbl));
   });
   ctrl.appendChild(seg);
+  const byName = d.managers.slice().sort((a,b)=>a.manager.localeCompare(b.manager));
   if (state.raceMode === 'one' && started){
     const sel = el('select',{onchange:e=>render('overview',{focus:+e.target.value})});
-    d.managers.slice().sort((a,b)=>a.manager.localeCompare(b.manager)).forEach(m=>
+    byName.forEach(m=>
       sel.appendChild(el('option',{value:m.entry,
         selected: m.entry===(state.focus ?? d.top5[0]?.entry) ? '' : null},
         `${m.manager} — ${m.team}`)));
     ctrl.appendChild(sel);
   }
+  if (state.raceMode === 'pick' && started){
+    const picks = state.picks || [];
+    const full = picks.length >= SERIES.length;
+    const sel = el('select',{disabled: full ? '' : null, onchange:e=>{
+      const id = +e.target.value;
+      if (id && !picks.includes(id)) render('overview',{picks: picks.concat(id)});
+    }}, el('option',{value:'', selected:''},
+          full ? `Five is the maximum` : 'Add a manager…'),
+       byName.filter(m=>!picks.includes(m.entry)).map(m=>
+         el('option',{value:m.entry}, `${m.manager} — ${m.team}`)));
+    ctrl.appendChild(sel);
+    picks.forEach((entry,i)=>{
+      const m = d.managers.find(x=>x.entry===entry);
+      if (!m) return;
+      ctrl.appendChild(el('span',{class:'pickchip'},
+        el('span',{class:'dot', style:`background:${cssv(SERIES[i])}`}),
+        m.manager,
+        el('button',{type:'button', 'aria-label':`Remove ${m.manager}`,
+          onclick:()=>render('overview',{picks: picks.filter(x=>x!==entry)})}, '×')));
+    });
+    if (picks.length) ctrl.appendChild(el('button',{class:'ghost', type:'button',
+      onclick:()=>render('overview',{picks:[]})}, 'Clear'));
+  }
   const race = el('div',{class:'chartwrap'});
   const c = card('The race for the title',
-    started ? 'League position after every gameweek. Every manager is drawn; hover or pick one to bring it forward. Click any grey line to follow that manager.'
+    started ? 'League position after every gameweek. Every manager is drawn; hover or pick one to bring it forward, or use Compare to line up to five against each other. Click any grey line to follow that manager.'
             : 'Positions plot here once the first gameweek is scored.',
     ctrl, race);
   host.appendChild(c);
@@ -931,8 +1047,13 @@ function pShame(host){
   /* The scope picker drives player tables in both halves of the page, so it
      sits above the headings rather than inside either one. */
   if (pt && pt.available) {
+    // Default to the most recent gameweek - that is what people come back to
+    // look at. Season-to-date is one click away in the same picker.
     const gws = pt.gws.slice().sort((a,b) => b - a);
-    if (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope))) state.hallScope = 'season';
+    if (state.hallScope === null ||
+        (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope)))) {
+      state.hallScope = gws.length ? String(gws[0]) : 'season';
+    }
 
     const picker = el('div',{class:'controls'},
       el('label',{class:'sub', for:'hallScope'}, 'Showing'),
@@ -1015,36 +1136,65 @@ function pShame(host){
 
 /* ---------- squads */
 function pSquads(host){
-  const d = DATA.differentials;
-  if (!d.template.length) return host.appendChild(card('Squads & differentials', null,
+  const D = DATA.differentials;
+  const gws = (D.gws || []).slice().sort((a,b)=>b-a);
+  const hasAny = gws.length || (D.season && D.season.template && D.season.template.length);
+  if (!hasAny) return host.appendChild(card('Squads & differentials', null,
     emptyState('Squads are private until the first deadline','Ownership data appears after Gameweek 1.')));
 
+  // Same rule as the Hall: open on the newest gameweek, with the whole season
+  // one click away.
+  if (state.squadScope === null ||
+      (state.squadScope !== 'season' && !gws.includes(Number(state.squadScope)))) {
+    state.squadScope = gws.length ? String(gws[0]) : 'season';
+  }
+  const scope = state.squadScope;
+  const view = scope === 'season' ? (D.season || {}) : ((D.by_gw || {})[scope] || {});
+  const isSeason = scope === 'season';
+
+  const picker = el('div',{class:'controls'},
+    el('label',{class:'sub', for:'squadScope'}, 'Showing'),
+    el('select',{id:'squadScope', onchange:e=>{ state.squadScope = e.target.value; render('squads'); }},
+      el('option',{value:'season', ...(isSeason ? {selected:'selected'} : {})}, 'Whole season'),
+      gws.map(g => el('option',{value:String(g),
+        ...(String(scope) === String(g) ? {selected:'selected'} : {})}, 'Gameweek ' + g))));
+  host.appendChild(card('Squads & differentials',
+    isSeason ? 'Ownership across every gameweek played so far.'
+             : `Who owned what in Gameweek ${scope}.`,
+    picker));
+
+  const nameCellPlayer = t => el('td',{},
+    el('span',{class:'who'}, t.player), ' ', el('span',{class:'teamname'}, t.team));
+
   const grid = el('div',{class:'cols3'});
-  grid.appendChild(card(`The league template · GW${d.gw}`,
-    'The players almost everyone owns. Deviate at your peril.',
-    table(['Player',{label:'Owned by',num:true}],
-      d.template.map(t => el('tr',{},
-        el('td',{}, el('span',{class:'who'}, t.player), ' ',
-                    el('span',{class:'teamname'}, t.team)),
-        el('td',{class:'num'}, t.count + ' · ' + t.pct + '%'))))));
+
+  grid.appendChild(card(isSeason ? 'The league template' : `The league template · GW${scope}`,
+    isSeason ? 'The players held most often across the season.'
+             : 'The players almost everyone owns. Deviate at your peril.',
+    (view.template || []).length ? table(['Player',{label:'Owned by',num:true}],
+      view.template.map(t => el('tr',{}, nameCellPlayer(t),
+        el('td',{class:'num'}, t.pct + '%'))))
+      : emptyState('Nothing yet','No ownership data for this period.')));
 
   grid.appendChild(card('Most-captained',
-    'Where the league put its armbands.',
-    table(['Player',{label:'Captains',num:true},{label:'Scored',num:true}],
-      d.captaincy.map(t => el('tr',{},
-        el('td',{}, el('span',{class:'who'}, t.player), ' ',
-                    el('span',{class:'teamname'}, t.team)),
+    isSeason ? 'Where the armbands went across the season, and what they returned.'
+             : 'Where the league put its armbands.',
+    (view.captaincy || []).length ? table(['Player',{label:'Captains',num:true},{label:'Scored',num:true}],
+      view.captaincy.map(t => el('tr',{}, nameCellPlayer(t),
         el('td',{class:'num'}, t.pct+'%'),
-        el('td',{class:'num'}, t.points ?? '–'))))));
+        el('td',{class:'num'}, t.points ?? '–'))))
+      : emptyState('Nothing yet','No captaincy data for this period.')));
 
   grid.appendChild(card('True differentials',
-    'Owned by exactly one manager in the league.',
-    d.unique.length ? table(['Player','Sole owner',{label:'Scored',num:true}],
-      d.unique.map(t => el('tr',{},
-        el('td',{}, el('span',{class:'who'}, t.player), ' ',
-                    el('span',{class:'teamname'}, t.team)),
+    isSeason ? 'Owned by exactly one manager, ranked on what they returned while nobody else had them.'
+             : 'Owned by exactly one manager, best return first.',
+    (view.unique || []).length ? table(
+      isSeason ? ['Player','Sole owner',{label:'GWs',num:true},{label:'Scored',num:true}]
+               : ['Player','Sole owner',{label:'Scored',num:true}],
+      view.unique.map(t => el('tr',{}, nameCellPlayer(t),
         el('td',{}, t.owner),
-        el('td',{class:'num'}, t.points ?? '–'))))
+        ...(isSeason ? [el('td',{class:'num'}, String(t.weeks ?? '–'))] : []),
+        el('td',{class:'num'}, el('strong',{}, String(t.points ?? 0))))))
       : emptyState('No differentials','Everyone owns everyone. A league of copycats.')));
 
   host.appendChild(grid);
