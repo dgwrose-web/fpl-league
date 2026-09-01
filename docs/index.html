@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 9 · Prize tiles trimmed to two; commentary path corrected.
+<!-- Mini-League HQ · SITE VERSION 10 · Email round-up tables rendered as images.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -212,10 +212,16 @@
   .tie .side.lose { color: var(--muted); }
   .tie .pts { font-variant-numeric: tabular-nums; }
 
+  /* This box is a preview of an email, so it wears the email's colours - white
+     paper and dark ink - in both themes. Rendering it in the site's dark
+     palette showed near-black text on aubergine, which was unreadable and told
+     you nothing about how the email would actually look. */
   .emailbox {
-    background: var(--plane); border:1px solid var(--border); border-radius:10px;
+    background:#ffffff; color:#0b0b0b;
+    border:1px solid var(--border); border-radius:10px;
     padding:20px 22px; max-height:560px; overflow:auto;
   }
+  .emailbox a { color:#1f6fa8; }
   .emailbox h3 { margin:0 0 4px; font-size:17px; }
   .emailbox h4 { margin:18px 0 6px; font-size:14px; }
   .emailbox p, .emailbox li { font-size:14px; line-height:1.55; }
@@ -426,7 +432,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '9';
+const SITE_VERSION = '10';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1229,7 +1235,103 @@ function pPrizes(host){
 }
 
 /* ---------- email */
-function buildEmailHTML(){
+/* Render one table to a PNG.
+
+   Email clients stretch real <table> markup to the width of the compose
+   window, which is what was mangling the columns on paste. A picture cannot be
+   reflowed, so it arrives looking exactly as it does here. Drawn at 2x so it
+   stays sharp on a phone, and a plain-text version travels alongside it for the
+   text-only copy button. */
+function tableImage(title, headers, rows){
+  const SCALE = 2, MAXW = 600, GAP = 18;
+  const INK = '#0b0b0b', MUTE = '#7a7a75', RULE = '#e1e0d9', HEAD = '#8a8a84';
+  const font = (w,sz) => `${w} ${sz}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+
+  const asCell = c => (c && typeof c === 'object') ? c : {main: String(c ?? '')};
+  const grid = rows.map(r => r.map(asCell));
+  const lastCol = headers.length - 1;
+  const rightAligned = i => i === lastCol;
+
+  // Natural column widths - the table is only ever as wide as it needs to be.
+  const w = headers.map(h => { ctx.font = font(600,11);
+    return ctx.measureText(String(h).toUpperCase()).width + 2; });
+  grid.forEach(r => r.forEach((c,i) => {
+    ctx.font = font(c.sub ? 700 : 400, 14);
+    w[i] = Math.max(w[i], ctx.measureText(c.main).width);
+    if (c.sub){ ctx.font = font(400,12.5); w[i] = Math.max(w[i], ctx.measureText(c.sub).width); }
+  }));
+  // The heading sits above the columns, so it has to be measured too - a long
+  // month name was being cut off the right-hand edge.
+  ctx.font = font(650,15);
+  const titleW = title ? ctx.measureText(title).width + 2 : 0;
+
+  // Every table gets the same width, so a run of them reads as one set rather
+  // than a ragged staircase. Slack goes to the widest text column; if the
+  // natural width is over budget, that same column gives it back.
+  const TARGET = Math.max(MAXW, Math.ceil(titleW));
+  let total = w.reduce((a,b)=>a+b,0) + GAP * lastCol;
+  const widest = w.indexOf(Math.max(...w));
+  w[widest] = Math.max(60, w[widest] + (TARGET - total));
+  total = w.reduce((a,b)=>a+b,0) + GAP * lastCol;
+
+  const rowH = grid.map(r => r.some(c=>c.sub) ? 40 : 29);
+  const titleH = title ? 26 : 0, headH = 24;
+  const H = titleH + headH + rowH.reduce((a,b)=>a+b,0) + 2;
+
+  cv.width = Math.ceil(total*SCALE); cv.height = Math.ceil(H*SCALE);
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,total,H);
+
+  let y = 0;
+  if (title){ ctx.fillStyle = INK; ctx.font = font(650,15); ctx.textAlign='left';
+              ctx.fillText(title, 0, 15); y = titleH; }
+
+  const x = []; let acc = 0;
+  headers.forEach((_,i)=>{ x[i] = acc; acc += w[i] + GAP; });
+
+  ctx.font = font(600,11); ctx.fillStyle = HEAD;
+  headers.forEach((h,i)=>{
+    ctx.textAlign = rightAligned(i) ? 'right' : 'left';
+    ctx.fillText(String(h).toUpperCase(), rightAligned(i) ? x[i]+w[i] : x[i], y+13);
+  });
+  ctx.strokeStyle = '#c3c2b7'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y+headH-3.5); ctx.lineTo(total, y+headH-3.5); ctx.stroke();
+  y += headH;
+
+  grid.forEach((r,ri)=>{
+    r.forEach((c,i)=>{
+      ctx.textAlign = rightAligned(i) ? 'right' : 'left';
+      const px = rightAligned(i) ? x[i]+w[i] : x[i];
+      ctx.fillStyle = c.muted ? MUTE : INK;
+      ctx.font = font(c.sub ? 700 : 400, 14);
+      ctx.fillText(c.main, px, y + (c.sub ? 16 : 19));
+      if (c.sub){ ctx.fillStyle = MUTE; ctx.font = font(400,12.5); ctx.fillText(c.sub, px, y+31); }
+    });
+    y += rowH[ri];
+    ctx.strokeStyle = RULE;
+    ctx.beginPath(); ctx.moveTo(0, y-0.5); ctx.lineTo(total, y-0.5); ctx.stroke();
+  });
+
+  return {url: cv.toDataURL('image/png'), width: Math.round(total)};
+}
+
+/* The same table as monospaced text, so the plain-text copy still carries the
+   numbers rather than a row of missing images. */
+function tableText(title, headers, rows){
+  const asCell = c => (c && typeof c === 'object') ? c : {main: String(c ?? '')};
+  const grid = rows.map(r => r.map(asCell));
+  const flat = grid.map(r => r.map(c => c.sub ? `${c.main} (${c.sub})` : c.main));
+  const w = headers.map((h,i) =>
+    Math.max(String(h).length, ...flat.map(r => (r[i]||'').length)));
+  const line = r => r.map((v,i) => i === headers.length-1
+      ? String(v).padStart(w[i]) : String(v).padEnd(w[i])).join('  ').replace(/\s+$/,'');
+  return `\n${title}\n${line(headers)}\n${w.map(n=>'-'.repeat(n)).join('  ')}\n`
+       + flat.map(line).join('\n') + '\n';
+}
+
+function buildEmail(){
   const d = DATA;
   const done = d.months.filter(m=>m.complete);
   const mo = done[done.length-1];
@@ -1238,94 +1340,99 @@ function buildEmailHTML(){
   const key = mo ? mo.key : null;
   const hand = key && w[key] ? w[key] : null;
   const S = 'font-family:system-ui,-apple-system,Segoe UI,sans-serif;';
+  const strip = t => t.replace(/<br\s*\/?>/gi,'\n').replace(/<\/p>|<\/li>/gi,'\n')
+                      .replace(/<li>/gi,'  - ').replace(/<[^>]+>/g,'')
+                      .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').trim();
+
   let h = `<div style="${S}max-width:640px;color:#0b0b0b">`;
+  let txt = '';
 
-  h += `<h2 style="margin:0 0 2px;font-size:20px">${esc(d.league.name)}</h2>`;
-  h += `<div style="color:#52514e;font-size:14px;margin-bottom:18px">`+
-       `${mo ? esc(mo.label)+' round-up' : 'Season preview'} · after Gameweek ${d.current_gw}</div>`;
+  const title = `${d.league.name}`;
+  const sub = `${mo ? mo.label+' round-up' : 'Season preview'} · after Gameweek ${d.current_gw}`;
+  h += `<h2 style="margin:0 0 2px;font-size:20px">${esc(title)}</h2>`;
+  h += `<div style="color:#52514e;font-size:14px;margin-bottom:18px">${esc(sub)}</div>`;
+  txt += `${title}\n${sub}\n`;
 
-  if (hand && hand.body_html) h += hand.body_html;
-  else if (hand && hand.body) h += `<p style="font-size:15px;line-height:1.55">${esc(hand.body).replace(/\n\n/g,'</p><p style="font-size:15px;line-height:1.55">')}</p>`;
+  let bodyHtml = '';
+  if (hand && hand.body_html) bodyHtml = hand.body_html;
+  else if (hand && hand.body) bodyHtml = `<p style="font-size:15px;line-height:1.55">${esc(hand.body).replace(/\n\n/g,'</p><p style="font-size:15px;line-height:1.55">')}</p>`;
   else if (auto.available){
-    h += `<p style="font-size:15px;line-height:1.55"><strong>${esc(auto.headline)}</strong></p><ul style="font-size:15px;line-height:1.6">`;
-    (auto.bullets||[]).forEach(b => h += `<li>${esc(b)}</li>`);
-    h += `</ul>`;
+    bodyHtml = `<p style="font-size:15px;line-height:1.55"><strong>${esc(auto.headline)}</strong></p><ul style="font-size:15px;line-height:1.6">`
+      + (auto.bullets||[]).map(b=>`<li>${esc(b)}</li>`).join('') + `</ul>`;
   } else {
-    h += `<p style="font-size:15px">The season hasn't kicked off yet. ${d.league.size} managers are signed up and the first deadline is ${esc(fmtDateTime(d.next_deadline))}.</p>`;
+    bodyHtml = `<p style="font-size:15px">The season hasn't kicked off yet. ${d.league.size} managers are signed up and the first deadline is ${esc(fmtDateTime(d.next_deadline))}.</p>`;
   }
+  h += bodyHtml;
+  txt += '\n' + strip(bodyHtml) + '\n';
 
-  // Only the final column is right-aligned; names stay left where they read best.
-  const tbl = (title, headers, rows) => {
-    const last = headers.length - 1;
-    const al = i => i === last ? 'right' : 'left';
-    let t = `<h3 style="font-size:15px;margin:22px 0 8px">${esc(title)}</h3>`;
-    t += `<table cellpadding="0" cellspacing="0" style="${S}border-collapse:collapse;width:100%;font-size:14px">`;
-    t += '<tr>' + headers.map((x,i)=>`<th style="text-align:${al(i)};padding:5px 8px 5px 0;border-bottom:1px solid #c3c2b7;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#898781">${esc(x)}</th>`).join('') + '</tr>';
-    rows.forEach(r => { t += '<tr>' + r.map((x,i)=>`<td style="text-align:${al(i)};padding:6px 8px 6px 0;border-bottom:1px solid #e1e0d9;vertical-align:top">${x}</td>`).join('') + '</tr>'; });
-    return t + '</table>';
+  const tbl = (t, headers, rows) => {
+    if (!rows.length) return;
+    const im = tableImage(t, headers, rows);
+    h += `<img src="${im.url}" width="${im.width}" alt="${esc(t)}" `
+       + `style="display:block;border:0;margin:22px 0 4px;width:${im.width}px;max-width:100%;height:auto">`;
+    txt += tableText(t, headers, rows);
   };
 
   if (mo && mo.table.length){
-    h += tbl(`${mo.label} — Manager of the Month`, ['#','Manager','Points'],
-      mo.table.slice(0,5).map(r => [String(r.rank),
-        `<strong>${esc(r.manager)}</strong><br><span style="color:#898781;font-size:12.5px">${esc(r.team)}</span>`,
-        String(r[d.basis])]));
+    tbl(`${mo.label} — Manager of the Month`, ['#','Manager','Points'],
+      mo.table.slice(0,5).map(r => [{main:String(r.rank), muted:true},
+        {main:r.manager, sub:r.team}, String(r[d.basis])]));
   }
   if (d.top5.length){
-    h += tbl('Overall top 5 — the places that pay', ['#','Manager','Total'],
-      d.top5.map(t => [String(t.rank),
-        `<strong>${esc(t.manager)}</strong><br><span style="color:#898781;font-size:12.5px">${esc(t.team)}</span>`,
-        String(t.total)]));
+    tbl('Overall top 5 — the places that pay', ['#','Manager','Total'],
+      d.top5.map(t => [{main:String(t.rank), muted:true},
+        {main:t.manager, sub:t.team}, String(t.total)]));
   }
   const hs = d.hall_of_shame;
   if (hs && hs.bench_season && hs.bench_season.length){
-    h += tbl('Hall of Fame & Shame', ['Award','Recipient','Damage'], [
-      ['Most points left on the bench',
-       `<strong>${esc(hs.bench_season[0].manager)}</strong>`, hs.bench_season[0].points + ' pts'],
+    tbl('Hall of Fame & Shame', ['Award','Recipient','Damage'], [
+      ['Most points left on the bench', {main:hs.bench_season[0].manager}, hs.bench_season[0].points+' pts'],
       ...(hs.captain_flops.length ? [['Worst captain call',
-        `<strong>${esc(hs.captain_flops[0].manager)}</strong> — ${esc(hs.captain_flops[0].player)}, GW${hs.captain_flops[0].gw}`,
-        hs.captain_flops[0].points + ' pts']] : []),
+        {main:hs.captain_flops[0].manager, sub:`${hs.captain_flops[0].player}, GW${hs.captain_flops[0].gw}`},
+        hs.captain_flops[0].points+' pts']] : []),
       ...(hs.hits_season.length && hs.hits_season[0].points ? [['Most burned on transfer hits',
-        `<strong>${esc(hs.hits_season[0].manager)}</strong>`, '−'+hs.hits_season[0].points+' pts']] : [])]);
+        {main:hs.hits_season[0].manager}, '-'+hs.hits_season[0].points+' pts']] : [])]);
   }
-  if (DATA.cup.status === 'active' && DATA.cup.rounds.length){
-    const last = DATA.cup.rounds[DATA.cup.rounds.length-1];
-    h += tbl(`Cup — ${last.label}`, ['Tie','Score'], last.matches.map(m =>
-      [`${esc(m.home.manager||'TBC')} v ${esc(m.away.manager||'TBC')}`,
-       `${m.home.points ?? '–'} — ${m.away.points ?? '–'}`]));
+  if (d.cup.status === 'active' && d.cup.rounds.length){
+    const last = d.cup.rounds[d.cup.rounds.length-1];
+    tbl(`Cup — ${last.label}`, ['Tie','Score'], last.matches.map(m =>
+      [`${m.home.manager||'TBC'} v ${m.away.manager||'TBC'}`,
+       `${m.home.points ?? '-'} — ${m.away.points ?? '-'}`]));
   }
-  const p = DATA.prizes;
+  const p = d.prizes;
   if (p.configured && p.running_totals.length){
-    h += tbl('Prize money so far', ['Manager','Won'],
-      p.running_totals.map(r => [`<strong>${esc(r.manager)}</strong>`, p.currency + r.amount]));
+    tbl('Prize money so far', ['Manager','Won'],
+      p.running_totals.map(r => [{main:r.manager}, p.currency + r.amount]));
   }
 
-  h += `<p style="color:#898781;font-size:12.5px;margin-top:26px">Full tables, charts and the Hall of Fame &amp; Shame: <a href="${location.href.split('#')[0]}">${esc(location.host + location.pathname)}</a></p>`;
-  return h + '</div>';
+  const link = location.href.split('#')[0];
+  h += `<p style="color:#898781;font-size:12.5px;margin-top:26px">Full tables, charts and the Hall of Fame &amp; Shame: <a href="${link}">${esc(location.host + location.pathname)}</a></p>`;
+  txt += `\nFull tables, charts and the Hall of Fame & Shame: ${link}\n`;
+  return {html: h + '</div>', text: txt};
 }
 
 function pEmail(host){
-  const html = buildEmailHTML();
+  const {html, text} = buildEmail();
   const box = el('div',{class:'emailbox', html});
   const btns = el('div',{class:'controls'},
     el('button',{class:'ghost', type:'button', onclick: async ()=>{
       try {
         await navigator.clipboard.write([new ClipboardItem({
           'text/html': new Blob([html], {type:'text/html'}),
-          'text/plain': new Blob([box.innerText], {type:'text/plain'})})]);
+          'text/plain': new Blob([text], {type:'text/plain'})})]);
         toast('Formatted round-up copied — paste straight into your email');
       } catch {
-        await navigator.clipboard.writeText(box.innerText);
+        await navigator.clipboard.writeText(text);
         toast('Copied as plain text');
       }
     }}, 'Copy formatted round-up'),
     el('button',{class:'ghost', type:'button', onclick: async ()=>{
-      await navigator.clipboard.writeText(box.innerText); toast('Copied as plain text');
+      await navigator.clipboard.writeText(text); toast('Copied as plain text');
     }}, 'Copy plain text'),
     el('button',{class:'ghost', type:'button', onclick: ()=>window.print()}, 'Print / save as PDF'));
 
   host.appendChild(card('Monthly round-up — ready to send',
-    'Everything below is formatted for email. Hit copy, paste into Gmail or Outlook, and the tables come with it.',
+    'Everything below is formatted for email. The tables are images, so they keep their shape when pasted into Gmail or Outlook instead of stretching.',
     btns, box));
 
   const w = DATA.commentary.written || {};
