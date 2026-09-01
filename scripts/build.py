@@ -469,39 +469,104 @@ def build(config: dict, client: FPLClient) -> dict:
     }
 
     # ----- differentials & template (latest finished gameweek)
-    differentials = {"gw": current_gw, "template": [], "unique": [], "captaincy": []}
-    if current_gw and picks_by_gw.get(current_gw):
-        gw_picks = picks_by_gw[current_gw]
+    name_of = {m["entry"]: m["manager"] for m in managers}
+
+    def differentials_for(gw: int) -> dict:
+        """Template, true differentials and captaincy for one gameweek.
+
+        A "true differential" is a player exactly one manager in the league
+        owned that week, ranked by what he actually returned - the whole point
+        is who got rewarded for going it alone, so the biggest hauls come first.
+        """
+        gw_picks = picks_by_gw.get(gw) or {}
+        if not gw_picks:
+            return {"template": [], "unique": [], "captaincy": []}
         owner_count: Counter[int] = Counter()
-        starter_count: Counter[int] = Counter()
         cap_count: Counter[int] = Counter()
+        cap_points: dict[int, int] = defaultdict(int)
         owners: dict[int, list[str]] = defaultdict(list)
-        name_of = {m["entry"]: m["manager"] for m in managers}
         for eid, pk in gw_picks.items():
             for p in pk.get("picks", []) or []:
                 owner_count[p["element"]] += 1
                 owners[p["element"]].append(name_of.get(eid, "?"))
-                if p.get("multiplier", 0) > 0:
-                    starter_count[p["element"]] += 1
                 if p.get("is_captain"):
                     cap_count[p["element"]] += 1
+        pts = live_points.get(gw, {})
         n = max(len(gw_picks), 1)
-        differentials["template"] = [
-            {"player": pname(pid), "team": pteam(pid), "count": c,
-             "pct": round(100 * c / n)}
-            for pid, c in owner_count.most_common(10)
-        ]
-        differentials["unique"] = [
+        unique = [
             {"player": pname(pid), "team": pteam(pid), "owner": owners[pid][0],
-             "points": live_points.get(current_gw, {}).get(pid)}
+             "points": pts.get(pid, 0) or 0, "gw": gw}
             for pid, c in owner_count.items() if c == 1
-        ][:12]
-        differentials["captaincy"] = [
-            {"player": pname(pid), "team": pteam(pid), "count": c,
-             "pct": round(100 * c / n),
-             "points": live_points.get(current_gw, {}).get(pid)}
-            for pid, c in cap_count.most_common(6)
         ]
+        unique.sort(key=lambda r: (-r["points"], r["player"]))
+        return {
+            "template": [{"player": pname(pid), "team": pteam(pid), "count": c,
+                          "pct": round(100 * c / n)}
+                         for pid, c in owner_count.most_common(8)],
+            "unique": unique[:10],
+            "captaincy": [{"player": pname(pid), "team": pteam(pid), "count": c,
+                           "pct": round(100 * c / n), "points": pts.get(pid, 0) or 0}
+                          for pid, c in cap_count.most_common(5)],
+        }
+
+    by_gw = {str(gw): differentials_for(gw) for gw in finished_gws if picks_by_gw.get(gw)}
+
+    # Season view: ownership counted across every gameweek a player was held,
+    # and differentials ranked on everything they returned while only one
+    # manager in the league owned them.
+    season_owned: Counter[int] = Counter()
+    season_cap: Counter[int] = Counter()
+    season_cap_pts: dict[int, int] = defaultdict(int)
+    uniq_pts: dict[int, int] = defaultdict(int)
+    uniq_weeks: Counter[int] = Counter()
+    uniq_owner: dict[int, str] = {}
+    for gw in finished_gws:
+        gw_picks = picks_by_gw.get(gw) or {}
+        if not gw_picks:
+            continue
+        counts: Counter[int] = Counter()
+        holder: dict[int, str] = {}
+        pts = live_points.get(gw, {})
+        for eid, pk in gw_picks.items():
+            for p in pk.get("picks", []) or []:
+                pid = p["element"]
+                counts[pid] += 1
+                holder[pid] = name_of.get(eid, "?")
+                if p.get("is_captain"):
+                    season_cap[pid] += 1
+                    season_cap_pts[pid] += pts.get(pid, 0) or 0
+        for pid, c in counts.items():
+            season_owned[pid] += c
+            if c == 1:
+                uniq_pts[pid] += pts.get(pid, 0) or 0
+                uniq_weeks[pid] += 1
+                uniq_owner.setdefault(pid, holder[pid])
+
+    total_slots = sum(len(picks_by_gw.get(gw) or {}) for gw in finished_gws) or 1
+    season_unique = [
+        {"player": pname(pid), "team": pteam(pid), "owner": uniq_owner.get(pid, "?"),
+         "points": pt, "weeks": uniq_weeks[pid]}
+        for pid, pt in uniq_pts.items()
+    ]
+    season_unique.sort(key=lambda r: (-r["points"], r["player"]))
+
+    differentials = {
+        "gw": current_gw,
+        "gws": sorted(int(g) for g in by_gw),
+        "by_gw": by_gw,
+        "season": {
+            "template": [{"player": pname(pid), "team": pteam(pid), "count": c,
+                          "pct": round(100 * c / total_slots)}
+                         for pid, c in season_owned.most_common(8)],
+            "unique": season_unique[:10],
+            "captaincy": [{"player": pname(pid), "team": pteam(pid), "count": c,
+                           "pct": round(100 * c / total_slots),
+                           "points": season_cap_pts[pid]}
+                          for pid, c in season_cap.most_common(5)],
+        },
+    }
+    latest = by_gw.get(str(current_gw)) or {"template": [], "unique": [], "captaincy": []}
+    differentials.update({k: latest[k] for k in ("template", "unique", "captaincy")})
 
     # ----- cup
     cup = build_cup(client, league_id, managers, config, events)
