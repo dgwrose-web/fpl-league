@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 8 · Pot total hidden; sponsored-voucher note on season prizes.
+<!-- Mini-League HQ · SITE VERSION 9 · Prize tiles trimmed to two; commentary path corrected.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -426,7 +426,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '8';
+const SITE_VERSION = '9';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1192,9 +1192,7 @@ function pPrizes(host){
     k('Total prizes', money(p.committed), `Across ${DATA.league.size} managers`);
     k('Paid out so far', money(p.month_awards.reduce((a,b)=>a+b.amount,0)),
       `${p.month_awards.length} monthly award${p.month_awards.length===1?'':'s'}`);
-    if (p.unallocated < 0) {
-      k('Over-allocated', money(Math.abs(p.unallocated)), 'More promised than collected');
-    }
+
     host.appendChild(kpis);
   }
 
@@ -1336,7 +1334,7 @@ function pEmail(host){
   if (mo && !w[mo.key]){
     host.appendChild(card('Where the writing comes from',
       'This round-up is currently the auto-generated version, built from the numbers. '+
-      'A hand-written edition drops into site/commentary.json each month and replaces it automatically here.'));
+      'A hand-written edition drops into docs/commentary.json each month and replaces it automatically here.'));
   }
 }
 
