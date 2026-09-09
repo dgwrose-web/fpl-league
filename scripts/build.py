@@ -482,17 +482,37 @@ def build(config: dict, client: FPLClient) -> dict:
         if not gw_picks:
             return {"template": [], "unique": [], "captaincy": []}
         owner_count: Counter[int] = Counter()
+        starter_count: Counter[int] = Counter()
         cap_count: Counter[int] = Counter()
-        cap_points: dict[int, int] = defaultdict(int)
         owners: dict[int, list[str]] = defaultdict(list)
         for eid, pk in gw_picks.items():
             for p in pk.get("picks", []) or []:
                 owner_count[p["element"]] += 1
                 owners[p["element"]].append(name_of.get(eid, "?"))
+                if (p.get("multiplier", 0) or 0) > 0:
+                    starter_count[p["element"]] += 1
                 if p.get("is_captain"):
                     cap_count[p["element"]] += 1
         pts = live_points.get(gw, {})
         n = max(len(gw_picks), 1)
+
+        # How "template" is each manager's starting eleven? For every player
+        # they actually fielded, what share of the league fielded him too; the
+        # average across the eleven is the score. Starters only, after
+        # auto-subs - a maverick pick that sat on the bench influenced nothing.
+        maverick = []
+        for eid, pk in gw_picks.items():
+            xi = [p["element"] for p in (pk.get("picks") or []) if (p.get("multiplier", 0) or 0) > 0]
+            if not xi:
+                continue
+            shares = [(pid, starter_count[pid] / n) for pid in xi]
+            rare = sum(1 for _, sh in shares if sh <= 0.10)
+            avg = round(100 * sum(sh for _, sh in shares) / len(shares), 1)
+            top3 = [[pname(pid), round(100 * sh)]
+                    for pid, sh in sorted(shares, key=lambda t: t[1])[:3]]
+            maverick.append([eid, avg, rare, top3])
+        maverick.sort(key=lambda r: r[1])
+
         unique = [
             {"player": pname(pid), "team": pteam(pid), "owner": owners[pid][0],
              "points": pts.get(pid, 0) or 0, "gw": gw}
@@ -504,6 +524,7 @@ def build(config: dict, client: FPLClient) -> dict:
                           "pct": round(100 * c / n)}
                          for pid, c in owner_count.most_common(8)],
             "unique": unique[:10],
+            "maverick": maverick,
             "captaincy": [{"player": pname(pid), "team": pteam(pid), "count": c,
                            "pct": round(100 * c / n), "points": pts.get(pid, 0) or 0}
                           for pid, c in cap_count.most_common(5)],
@@ -520,11 +541,14 @@ def build(config: dict, client: FPLClient) -> dict:
     uniq_pts: dict[int, int] = defaultdict(int)
     uniq_weeks: Counter[int] = Counter()
     uniq_owner: dict[int, str] = {}
+    # eid -> pid -> [starts, summed league share], for the season maverick names
+    mav_player: dict[int, dict[int, list]] = defaultdict(lambda: defaultdict(lambda: [0, 0.0]))
     for gw in finished_gws:
         gw_picks = picks_by_gw.get(gw) or {}
         if not gw_picks:
             continue
         counts: Counter[int] = Counter()
+        starts: Counter[int] = Counter()
         holder: dict[int, str] = {}
         pts = live_points.get(gw, {})
         for eid, pk in gw_picks.items():
@@ -532,9 +556,18 @@ def build(config: dict, client: FPLClient) -> dict:
                 pid = p["element"]
                 counts[pid] += 1
                 holder[pid] = name_of.get(eid, "?")
+                if (p.get("multiplier", 0) or 0) > 0:
+                    starts[pid] += 1
                 if p.get("is_captain"):
                     season_cap[pid] += 1
                     season_cap_pts[pid] += pts.get(pid, 0) or 0
+        gw_n = max(len(gw_picks), 1)
+        for eid, pk in gw_picks.items():
+            for p in pk.get("picks", []) or []:
+                if (p.get("multiplier", 0) or 0) > 0:
+                    rec = mav_player[eid][p["element"]]
+                    rec[0] += 1
+                    rec[1] += starts[p["element"]] / gw_n
         for pid, c in counts.items():
             season_owned[pid] += c
             if c == 1:
@@ -550,6 +583,31 @@ def build(config: dict, client: FPLClient) -> dict:
     ]
     season_unique.sort(key=lambda r: (-r["points"], r["player"]))
 
+    mav_sum: dict[int, float] = defaultdict(float)
+    mav_n: Counter[int] = Counter()
+    mav_rare: Counter[int] = Counter()
+    for v in by_gw.values():
+        for eid, pct, rare, _top in v.get("maverick", []):
+            mav_sum[eid] += pct
+            mav_n[eid] += 1
+            mav_rare[eid] += rare
+
+    def season_top3(eid: int) -> list:
+        # Rarest first, and among equally rare players the one they fielded
+        # most - a one-week punt is less telling than a season-long conviction.
+        items = [(pid, share / max(st, 1), st)
+                 for pid, (st, share) in mav_player.get(eid, {}).items()]
+        items.sort(key=lambda t: (t[1], -t[2]))
+        return [[pname(pid), round(100 * sh)] for pid, sh, _ in items[:3]]
+
+    # Rare picks averaged per gameweek, not summed - a season total reads like a
+    # count of players and would be nonsense beside a single week's figure.
+    season_maverick = sorted(
+        ([eid, round(mav_sum[eid] / mav_n[eid], 1),
+          round(mav_rare[eid] / mav_n[eid], 1), season_top3(eid)]
+         for eid in mav_n),
+        key=lambda r: r[1])
+
     differentials = {
         "gw": current_gw,
         "gws": sorted(int(g) for g in by_gw),
@@ -559,6 +617,7 @@ def build(config: dict, client: FPLClient) -> dict:
                           "pct": round(100 * c / total_slots)}
                          for pid, c in season_owned.most_common(8)],
             "unique": season_unique[:10],
+            "maverick": season_maverick,
             "captaincy": [{"player": pname(pid), "team": pteam(pid), "count": c,
                            "pct": round(100 * c / total_slots),
                            "points": season_cap_pts[pid]}
