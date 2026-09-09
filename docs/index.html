@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 18 · Numbers centred in every table.
+<!-- Mini-League HQ · SITE VERSION 19 · Hall tabs open on the season.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -510,7 +510,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '18';
+const SITE_VERSION = '19';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1173,9 +1173,12 @@ function hallGrid(cls, cards){
 function hallControls(tab){
   const pt = DATA.player_tables;
   const gws = (pt && pt.available ? pt.gws : []).slice().sort((a,b)=>b-a);
+  // Open on the season, not the newest gameweek: a single week reads as a lot
+  // of zeroes, and "who has scored most goals" is usually a season question.
+  // The gameweek view is one click away in the same picker.
   if (state.hallScope === null ||
       (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope)))) {
-    state.hallScope = gws.length ? String(gws[0]) : 'season';
+    state.hallScope = 'season';
   }
   // Both hall tabs render this, and both panels stay in the DOM, so the ids
   // have to be per-tab or the page carries duplicates and the labels point at
