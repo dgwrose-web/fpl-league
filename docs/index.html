@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Mini-League HQ · SITE VERSION 11 · Squads by gameweek, compare mode on the race chart.
+<!-- Mini-League HQ · SITE VERSION 18 · Numbers centred in every table.
      The version also prints in the page footer, so you can confirm at a glance
      which build is actually live without digging through the source. -->
 <html lang="en" data-theme="dark">
@@ -9,14 +9,18 @@
 <title>Mini-League HQ</title>
 <style>
   :root {
-    --surface-1: #fcfcfb;
-    --plane: #f9f9f7;
-    --text-primary: #1a0420;
-    --text-secondary: #55415b;
-    --muted: #7e6b84;
-    --grid: #e7dfeb;
-    --axis: #cfc2d5;
-    --border: rgba(26,4,32,0.12);
+    /* Light mode is the same Premier League palette at the other end of the
+       ramp: aubergine ink on a lilac-tinted ground, white cards, and the brand
+       green kept for accents. Series colours are unchanged - they are validated
+       against THIS surface and re-tinting them would break the checks. */
+    --surface-1: #ffffff;
+    --plane: #f1ecf5;
+    --text-primary: #1c0522;
+    --text-secondary: #4d3654;
+    --muted: #6f5c76;
+    --grid: #e6dcec;
+    --axis: #c9b8d1;
+    --border: rgba(55,0,60,0.14);
     /* Series hues are Premier League brand families stepped for THIS surface -
        validated: lightness band, chroma floor, CVD separation, contrast. The
        neon brand greens/cyans are accents only; as large fills they glare. */
@@ -124,8 +128,10 @@
   tr:last-child td { border-bottom: none; }
   /* Right-aligned numbers keep their own gutter on the left so a following
      text column can never butt up against them. */
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums;
-                   padding-right: 0; padding-left: 18px; }
+  /* Numbers sit centred in their column. Padding is symmetric so "centred"
+     is actually centred rather than nudged by a one-sided gutter. */
+  td.num, th.num { text-align: center; font-variant-numeric: tabular-nums;
+                   padding-right: 9px; padding-left: 9px; }
   th.num + th, td.num + td { padding-left: 18px; }
   td.pos { color: var(--muted); font-variant-numeric: tabular-nums; width: 34px; }
   .who { font-weight: 600; }
@@ -157,11 +163,8 @@
   .gridline { stroke: var(--grid); stroke-width: 1; }
   .axisline { stroke: var(--axis); stroke-width: 1; }
   .ticklabel { fill: var(--muted); font-size: 11px; }
-  .ctxline { stroke: var(--context); stroke-width: 1.25; fill: none; opacity: .55;
-             cursor: pointer; transition: opacity .12s, stroke .12s; }
-  .ctxline:hover { opacity: 1; stroke: var(--text-secondary); }
   .hiline { stroke-width: 2; fill: none; stroke-linejoin: round; stroke-linecap: round;
-            pointer-events: none; }
+            pointer-events: none; cursor: pointer; }
   .himark { stroke: var(--surface-1); stroke-width: 2; pointer-events: none; }
   .endlabel { font-size: 11.5px; font-weight: 600; }
   .bar { rx: 4; }
@@ -290,10 +293,27 @@
      the column stays aligned above and below the highlighted one. Tables
      without a rank column start with a name, which was getting clipped. */
   td:first-child, th:first-child { padding-left: 10px; }
-  td.pos { width: 44px; }
+  td.pos { width: 44px; text-align: center; padding-left: 0; }
 
   /* Sortable headers. The arrow is always present but faint until used, so the
      affordance is visible without 8 bright arrows shouting at once. */
+  /* One player per line, name left and share right, so three differentials
+     read as a small list rather than a run-on sentence. Tight line-height keeps
+     the row about the height of the two-line manager cell beside it. */
+  .diffpick { display: flex; justify-content: space-between; gap: 12px;
+              line-height: 1.35; white-space: nowrap; width: 170px; }
+  .diffpick .nm { font-weight: 600; }
+  .diffpick .ow { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .diffcell { width: 170px; }
+
+  /* The manager summary is three short columns; left full-width it strands the
+     numbers on the far side of the card. */
+  .card.summary table { width: auto; min-width: 360px; }
+  .card.summary td:first-child, .card.summary th:first-child { padding-right: 26px; }
+  /* Two numeric columns side by side need a gap of their own, and the last one
+     needs room on the right or "1st of 20" sits flush against the card edge. */
+  .card.summary td.num + td.num, .card.summary th.num + th.num { padding-left: 26px; }
+
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--text-primary); }
   th.sortable::after {
@@ -350,6 +370,36 @@
     padding:0 4px; color: var(--muted); font-family:inherit;
   }
   .pickchip button:hover { color: var(--critical); }
+
+  /* Card headings carry the brand purple in light mode; in dark they stay
+     white, because purple on aubergine is unreadable. */
+  :root:not([data-theme="dark"]) .card > h2,
+  :root:not([data-theme="dark"]) .kpi .value,
+  :root:not([data-theme="dark"]) .hallband h2 { color: var(--brand-purple); }
+  :root:not([data-theme="dark"]) .card {
+    box-shadow: 0 1px 2px rgba(55,0,60,0.05), 0 6px 18px rgba(55,0,60,0.04);
+  }
+  :root:not([data-theme="dark"]) nav.tabs button[aria-selected="true"] {
+    background: color-mix(in srgb, var(--brand-purple) 8%, #fff);
+    border-color: color-mix(in srgb, var(--brand-purple) 22%, transparent);
+    color: var(--brand-purple);
+  }
+  :root:not([data-theme="dark"]) th { color: var(--brand-purple); opacity: .75; }
+
+  /* Long tables fold away, so a tab is a screen or two rather than five. */
+  details.fold { background: var(--surface-1); border: 1px solid var(--border);
+                 border-radius: 12px; padding: 4px 20px 4px; margin-bottom: 18px; }
+  details.fold > summary {
+    list-style: none; cursor: pointer; padding: 14px 0;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  details.fold > summary .hint { color: var(--muted); font-size: 12.5px; }
+  details.fold > summary .chev { margin-left: auto; color: var(--muted); font-size: 12px; }
+  details.fold[open] > summary .chev { transform: rotate(180deg); }
+  details.fold > .body { padding-bottom: 16px; }
+  details.fold > .body > .note { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
 
   .sponsor { display: flex; align-items: center; gap: 10px; align-self: center; }
   .sponsor-label {
@@ -411,11 +461,13 @@
   <section class="panel" id="p-overview"></section>
   <section class="panel" id="p-month"></section>
   <section class="panel" id="p-season"></section>
+  <section class="panel" id="p-fame"></section>
   <section class="panel" id="p-shame"></section>
   <section class="panel" id="p-squads"></section>
   <section class="panel" id="p-cup"></section>
   <section class="panel" id="p-prizes"></section>
   <section class="panel" id="p-email"></section>
+  <section class="panel" id="p-archive"></section>
 
   <div class="foot">
     <span id="stamp"></span>
@@ -458,7 +510,7 @@ const CHIP = {'3xc':'Triple Captain','bboost':'Bench Boost','freehit':'Free Hit'
               'wildcard':'Wildcard','manager':'Assistant Manager'};
 // Bumped whenever index.html changes. Printed in the footer so a glance at the
 // live site confirms which build is deployed - no view-source needed.
-const SITE_VERSION = '11';
+const SITE_VERSION = '18';
 
 const SERIES = ['--series-1','--series-2','--series-3','--series-4','--series-5'];
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -486,13 +538,11 @@ function rankRace(container, mode, focusEntry) {
   const svg = svgEl('svg', {class:'chart', viewBox:`0 0 ${W} ${H}`,
                             role:'img', 'aria-label':'League position by gameweek'});
 
-  // gridlines: positions 1, 5, 10, 15, 20…
-  const ticks = [1, ...Array.from({length:N}, (_,i)=>i+1).filter(p=>p%5===0)];
-  ticks.forEach(p => {
-    svg.appendChild(svgEl('line',{class:'gridline', x1:M.l, x2:M.l+iw, y1:y(p), y2:y(p)}));
-    const t = svgEl('text',{class:'ticklabel', x:M.l-8, y:y(p)+4, 'text-anchor':'end'});
-    t.textContent = ord(p); svg.appendChild(t);
-  });
+  // Gridlines go in their own layer: the y-scale is finalised once we know
+  // which managers are actually drawn, and this gets redrawn at that point.
+  const gridLayer = svgEl('g', {});
+  svg.appendChild(gridLayer);
+  const ticks = [];
   const step = gws.length > 20 ? 5 : (gws.length > 10 ? 2 : 1);
   gws.filter((g,i)=> i===0 || i===gws.length-1 || g%step===0).forEach(g => {
     const t = svgEl('text',{class:'ticklabel', x:x(g), y:H-12, 'text-anchor':'middle'});
@@ -517,41 +567,57 @@ function rankRace(container, mode, focusEntry) {
     tip.style.opacity = 1;
   };
 
+  const bySize = mgrs.slice().sort((a,b)=>b.total-a.total);
   const highlight = [];
   if (mode === 'top5') {
-    mgrs.slice().sort((a,b)=>b.total-a.total).slice(0,5)
-        .forEach((m,i)=> highlight.push({m, color: cssv(SERIES[i])}));
+    /* Five is the whole palette, and the five places that pay. More lines than
+       this and the colours stop separating - ten of them measured at a
+       colour-blind separation of 1.4, i.e. indistinguishable. */
+    bySize.slice(0, SERIES.length).forEach((m,i)=>
+      highlight.push({m, color: cssv(SERIES[i])}));
   } else if (mode === 'pick') {
-    // Capped at five because there are five validated line colours; a sixth
-    // would have to repeat one, and two managers sharing a colour on a chart
-    // this busy is worse than not drawing them.
     (state.picks || []).slice(0, SERIES.length).forEach((entry, i) => {
       const m = mgrs.find(x => x.entry === entry);
       if (m) highlight.push({m, color: cssv(SERIES[i])});
     });
   } else {
-    const f = mgrs.find(m=>m.entry===focusEntry) || mgrs.slice().sort((a,b)=>b.total-a.total)[0];
+    const f = mgrs.find(m=>m.entry===focusEntry) || bySize[0];
     if (f) highlight.push({m:f, color: cssv('--series-1')});
   }
-  const hiIds = new Set(highlight.map(h=>h.m.entry));
+  if (!highlight.length) highlight.push({m: bySize[0], color: cssv('--series-1')});
 
-  // context lines first, so the highlighted ones sit on top
-  mgrs.filter(m=>!hiIds.has(m.entry)).forEach(m => {
-    const p = svgEl('path',{class:'ctxline', d:path(m)});
-    p.addEventListener('mousemove', e=>showTip(m,e));
-    p.addEventListener('mouseleave', ()=> tip.style.opacity=0);
-    p.addEventListener('click', ()=> { render('overview',{focus:m.entry, mode:'one'}); });
-    svg.appendChild(p);
+  // Only the drawn managers are on screen now, so the axis stops where they do
+  // rather than leaving two-thirds of the chart empty.
+  const drawnMax = Math.max(...highlight.flatMap(({m}) =>
+    m.history.filter(h=>h.league_pos).map(h=>h.league_pos)));
+  const posMax = Math.max(2, Math.min(N, drawnMax + 1));
+  const y2 = pos => M.t + ih * ((pos-1)/Math.max(posMax-1,1));
+
+  ticks.length = 0;
+  [1, ...Array.from({length:posMax},(_,i)=>i+1).filter(v=>v%5===0)]
+    .filter(v=>v<=posMax).forEach(v=>ticks.push(v));
+  gridLayer.innerHTML = '';
+  ticks.forEach(pos => {
+    gridLayer.appendChild(svgEl('line',{class:'gridline', x1:M.l, x2:M.l+iw, y1:y2(pos), y2:y2(pos)}));
+    const t = svgEl('text',{class:'ticklabel', x:M.l-8, y:y2(pos)+4, 'text-anchor':'end'});
+    t.textContent = ord(pos); gridLayer.appendChild(t);
   });
 
+  const path2 = m => m.history.filter(h=>h.league_pos)
+    .map((h,i)=> `${i?'L':'M'}${x(h.gw).toFixed(1)},${y2(h.league_pos).toFixed(1)}`).join('');
+
   highlight.forEach(({m,color}) => {
-    svg.appendChild(svgEl('path',{class:'hiline', d:path(m), stroke:color}));
+    const line = svgEl('path',{class:'hiline', d:path2(m), stroke:color});
+    line.style.pointerEvents = 'stroke';
+    line.addEventListener('mousemove', e=>showTip(m,e));
+    line.addEventListener('mouseleave', ()=> tip.style.opacity=0);
+    svg.appendChild(line);
     const pts = m.history.filter(h=>h.league_pos);
     if (gws.length <= 24) pts.forEach(h =>
-      svg.appendChild(svgEl('circle',{class:'himark', cx:x(h.gw), cy:y(h.league_pos),
+      svg.appendChild(svgEl('circle',{class:'himark', cx:x(h.gw), cy:y2(h.league_pos),
                                       r:4, fill:color})));
     const last = pts.slice(-1)[0];
-    const lab = svgEl('text',{class:'endlabel', x:x(last.gw)+10, y:y(last.league_pos)+4, fill:color});
+    const lab = svgEl('text',{class:'endlabel', x:x(last.gw)+10, y:y2(last.league_pos)+4, fill:color});
     lab.textContent = m.manager.split(' ')[0] + ' · ' + ord(last.league_pos);
     svg.appendChild(lab);
   });
@@ -560,7 +626,8 @@ function rankRace(container, mode, focusEntry) {
   if (mode === 'top5') {
     const lg = el('div',{class:'legend'});
     highlight.forEach(({m,color}) => lg.appendChild(el('span',{class:'k'},
-      el('span',{class:'swatch', style:`background:${color}`}), `${m.manager} — ${m.team}`)));
+      el('span',{class:'swatch', style:`background:${color}`}),
+      `${m.manager} — ${m.team}`)));
     container.appendChild(lg);
   }
 }
@@ -688,6 +755,20 @@ function table(headers, rows){
   t._rows = rows.slice();          // to restore the original order
   return t;
 }
+/* A card whose contents collapse. Used for the long league-wide tables so a
+   tab opens at a readable length and expands on demand. */
+function foldCard(title, hint, note, open, ...body){
+  const d = el('details',{class:'fold', ...(open ? {open:''} : {})},
+    el('summary',{}, el('h2',{}, title),
+      hint ? el('span',{class:'hint'}, hint) : null,
+      el('span',{class:'chev'}, '\u25BC')));
+  const b = el('div',{class:'body'});
+  if (note) b.appendChild(el('p',{class:'note'}, note));
+  body.flat().forEach(x => x && b.appendChild(x));
+  d.appendChild(b);
+  return d;
+}
+
 function card(title, note, ...body){
   const c = el('div',{class:'card'}, el('h2',{},title));
   if (note) c.appendChild(el('p',{class:'note'}, note));
@@ -699,8 +780,9 @@ function emptyState(big, small){
 }
 
 /* ============================================================ panels */
-const state = { tab:'overview', focus:null, raceMode:'one', picks:[], month:null,
-                cupRound:null, hallScope:null, squadScope:null };
+const state = { tab:'overview', focus:null, raceMode:'top5', picks:[], month:null,
+                cupRound:null, hallScope:null, squadScope:null, hallFocus:null,
+                raceTop:10, moveGw:null };
 
 function render(tab, opts={}){
   if (tab) state.tab = tab;
@@ -711,8 +793,9 @@ function render(tab, opts={}){
     p.classList.toggle('active', p.id === 'p-'+state.tab));
   const host = $('#p-'+state.tab);
   host.innerHTML = '';
-  ({overview:pOverview, month:pMonth, season:pSeason, shame:pShame,
-    squads:pSquads, cup:pCup, prizes:pPrizes, email:pEmail}[state.tab])(host);
+  ({overview:pOverview, month:pMonth, season:pSeason, fame:pFame, shame:pShame,
+    squads:pSquads, cup:pCup, prizes:pPrizes, archive:pArchive,
+    email:pEmail}[state.tab])(host);
   window.scrollTo({top:0, behavior:'instant'});
 }
 
@@ -758,7 +841,7 @@ function pOverview(host){
   // rank race
   const ctrl = el('div',{class:'controls'});
   const seg = el('div',{class:'seg'});
-  [['one','Highlight one'],['top5','Top 5'],['pick','Compare']].forEach(([k,lbl])=>{
+  [['top5','Top 5'],['one','Highlight one'],['pick','Compare']].forEach(([k,lbl])=>{
     seg.appendChild(el('button',{type:'button','aria-pressed':String(state.raceMode===k),
       onclick:()=>render('overview',{raceMode:k})}, lbl));
   });
@@ -796,14 +879,13 @@ function pOverview(host){
       onclick:()=>render('overview',{picks:[]})}, 'Clear'));
   }
   const race = el('div',{class:'chartwrap'});
-  const c = card('The race for the title',
-    started ? 'League position after every gameweek. Every manager is drawn; hover or pick one to bring it forward, or use Compare to line up to five against each other. Click any grey line to follow that manager.'
+  const chartCard = card('The race for the title',
+    started ? 'League position after every gameweek. Only the managers you choose are drawn - the prize five by default. Hover a line for their standing, or use Compare to line up five of your own choosing.'
             : 'Positions plot here once the first gameweek is scored.',
     ctrl, race);
-  host.appendChild(c);
-  rankRace(race, state.raceMode, state.focus ?? d.top5[0]?.entry);
 
-  // top 5
+  // Tables first: the standings are what people come for, and the chart is the
+  // supporting detail rather than the headline.
   if (started){
     const rows = d.top5.map(t => {
       const m = d.managers.find(x=>x.entry===t.entry);
@@ -818,14 +900,74 @@ function pOverview(host){
     host.appendChild(card('Top 5 — the places that pay',
       'Prize positions as they stand. Movement is against last gameweek.',
       table(['#', 'Manager', {label:'Move',num:true}, {label:'Points',num:true}], rows)));
+    host.appendChild(movementCards());
   } else {
     host.appendChild(card('Top 5 — the places that pay', null,
       emptyState(`${d.league.size} managers signed up`,
                  'Standings appear after the first gameweek is scored.')));
   }
+
+  host.appendChild(chartCard);
+  rankRace(race, state.raceMode, state.focus ?? d.top5[0]?.entry);
 }
 
 /* ---------- month */
+/* Who slid, and who climbed, in a single gameweek. Position change needs the
+   week before as well, so gameweek 1 has nothing to compare against. */
+function movementCards(){
+  const gws = [...new Set(DATA.managers.flatMap(m =>
+    (m.history||[]).filter(h=>h.league_pos).map(h=>h.gw)))].sort((a,b)=>b-a);
+  const usable = gws.filter(g => gws.includes(g-1));
+  if (!usable.length) return card('Fall from grace', null,
+    emptyState('Nothing to compare yet','Movement needs two scored gameweeks.'));
+
+  if (state.moveGw === null || state.moveGw === undefined || !usable.includes(state.moveGw)) {
+    state.moveGw = usable[0];
+  }
+  const gw = state.moveGw;
+
+  const moves = [];
+  DATA.managers.forEach(m => {
+    const now  = (m.history||[]).find(h => h.gw === gw && h.league_pos);
+    const prev = (m.history||[]).find(h => h.gw === gw-1 && h.league_pos);
+    if (now && prev) moves.push({entry:m.entry, manager:m.manager, team:m.team,
+      from: prev.league_pos, to: now.league_pos, delta: prev.league_pos - now.league_pos,
+      pts: now.net});
+  });
+
+  // One picker per card - they move together, but a control that only appears
+  // on the left-hand table looks like it belongs to that table alone.
+  const picker = which => el('div',{class:'controls'},
+    el('label',{class:'sub', for:'moveGw-'+which}, 'Gameweek'),
+    el('select',{id:'moveGw-'+which,
+      onchange:e => render('overview',{moveGw:+e.target.value})},
+      usable.map(g => el('option',{value:String(g),
+        ...(g===gw?{selected:'selected'}:{})}, 'GW'+g))));
+
+  const mkTable = (list, dropping) => list.length
+    ? table(['Manager',{label:'From',num:true},{label:'To',num:true},
+             {label:dropping?'Places lost':'Places gained',num:true},{label:'GW pts',num:true}],
+        list.map(r => el('tr',{},
+          nameCell(r.manager, r.team, r.entry),
+          el('td',{class:'num'}, ord(r.from)),
+          el('td',{class:'num'}, ord(r.to)),
+          el('td',{class:'num'}, el('span',{class: dropping?'delta-dn':'delta-up'},
+            (dropping?'▼ ':'▲ ') + Math.abs(r.delta))),
+          el('td',{class:'num'}, String(r.pts)))))
+    : emptyState(dropping ? 'Nobody went backwards' : 'Nobody climbed',
+                 'A remarkably static gameweek.');
+
+  const fell = moves.filter(r=>r.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,8);
+  const rose = moves.filter(r=>r.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,8);
+
+  const grid = el('div',{class:'cols2'});
+  grid.appendChild(card(`Fall from grace · GW${gw}`,
+    'The steepest drops down the table this gameweek.', picker('fell'), mkTable(fell, true)));
+  grid.appendChild(card(`On the up · GW${gw}`,
+    'And the week\'s biggest climbers, for balance.', picker('rose'), mkTable(rose, false)));
+  return grid;
+}
+
 function pMonth(host){
   const d = DATA;
   const usable = d.months.filter(m=>m.table && m.table.length);
@@ -868,17 +1010,6 @@ function pMonth(host){
     }
     host.appendChild(kpis);
   }
-
-  const chart = el('div',{class:'chartwrap'});
-  host.appendChild(card(mo.label + ' table',
-    `Scored on ${d.basis === 'net' ? 'net points — transfer hits deducted, exactly as the league table works'
-                                   : 'gross points, before transfer hits'}.`,
-    chart));
-  barChart(chart, mo.table.slice(0,20).map((r,i)=>({
-    label: r.manager, [d.basis]: r[d.basis],
-    tip: `${r.gross} gross${r.hits?` − ${r.hits} hits`:''} · ${r.bench} on the bench`,
-    color: i===0 ? 'var(--series-1)' : 'var(--seq-250)'
-  })), d.basis, {label: mo.label + ' points'});
 
   const rows = mo.table.map(r => el('tr',{},
     el('td',{class:'pos'}, medal(r.rank)),
@@ -984,7 +1115,7 @@ function hallRows(scope){
       const arr = m.per_gw[g];
       if (arr) pt.keys.forEach((k,i) => acc[k] += arr[i]);
     });
-    return Object.assign({manager:m.manager, team:m.team}, acc);
+    return Object.assign({entry:m.entry, manager:m.manager, team:m.team}, acc);
   });
 }
 
@@ -1002,17 +1133,19 @@ function hallStatCard(spec, rows){
           String(r[c.k]))))))));
 }
 
-function hallPositionCard(rows){
+function hallPositionCard(rows, bare){
   const withTotal = rows.map(r => Object.assign({}, r,
     {tot: r.p_gk + r.p_def + r.p_mid + r.p_fwd}));
   withTotal.sort((a,b) => b.tot - a.tot);
   if (!withTotal.length || withTotal[0].tot === 0) {
-    return card('Points by position', 'Where each manager is winning their points.',
-      emptyState('No points banked yet','This fills in once a gameweek is scored.'));
+    const empty = emptyState('No points banked yet','This fills in once a gameweek is scored.');
+    return bare ? empty : card('Points by position',
+      'Where each manager is winning their points.', empty);
   }
-  return card('Points by position',
-    'Where each manager is actually winning their points. Every manager, not just the top eight.',
-    table(['Manager',{label:'GK',num:true},{label:'DEF',num:true},{label:'MID',num:true},
+  // `bare` returns just the table, for dropping inside a collapsible card.
+  const wrap = bare ? (t => t) : (t => card('Points by position',
+    'Where each manager is actually winning their points. Every manager, not just the top eight.', t));
+  return wrap(table(['Manager',{label:'GK',num:true},{label:'DEF',num:true},{label:'MID',num:true},
            {label:'FWD',num:true},{label:'Total',num:true}],
       withTotal.map((r,i) => el('tr',{class: i === 0 ? 'me' : ''},
         nameCell(r.manager, r.team),
@@ -1020,7 +1153,8 @@ function hallPositionCard(rows){
         el('td',{class:'num'}, String(r.p_def)),
         el('td',{class:'num'}, String(r.p_mid)),
         el('td',{class:'num'}, String(r.p_fwd)),
-        el('td',{class:'num'}, el('strong',{}, String(r.tot)))))));
+        el('td',{class:'num'}, el('strong',{}, String(r.tot))))))
+  );
 }
 
 function hallBand(title, note, shame){
@@ -1034,107 +1168,215 @@ function hallGrid(cls, cards){
   return g;
 }
 
-function pShame(host){
-  const h = DATA.hall_of_shame;
-  if (!DATA.current_gw) return host.appendChild(card('Hall of Fame & Shame', null,
-    emptyState('Nobody has covered themselves in glory or shame yet','Give it until Gameweek 1.')));
-
+/* Shared furniture for the two hall tabs: the gameweek picker, and a manager
+   picker that collapses every table into one row about one person. */
+function hallControls(tab){
   const pt = DATA.player_tables;
-  const specs = {};
-  hallTableSpecs().forEach(sp => specs[sp.key] = sp);
-  let rows = null;
-
-  /* The scope picker drives player tables in both halves of the page, so it
-     sits above the headings rather than inside either one. */
-  if (pt && pt.available) {
-    // Default to the most recent gameweek - that is what people come back to
-    // look at. Season-to-date is one click away in the same picker.
-    const gws = pt.gws.slice().sort((a,b) => b - a);
-    if (state.hallScope === null ||
-        (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope)))) {
-      state.hallScope = gws.length ? String(gws[0]) : 'season';
-    }
-
-    const picker = el('div',{class:'controls'},
-      el('label',{class:'sub', for:'hallScope'}, 'Showing'),
-      el('select',{id:'hallScope', onchange:e => { state.hallScope = e.target.value; render('shame'); }},
-        el('option',{value:'season', ...(state.hallScope === 'season' ? {selected:'selected'} : {})},
-           'Season to date'),
-        gws.map(g => el('option',{value:String(g),
-          ...(String(state.hallScope) === String(g) ? {selected:'selected'} : {})}, 'Gameweek ' + g))));
-
-    const scopeNote = (pt.scope === 'all_15'
-      ? 'Counting all fifteen squad members.'
-      : 'Counting only players who actually lined up for you, auto-subs included.')
-      + ' Applies to the player tables in both halves below.';
-    host.appendChild(card('Player honours', scopeNote, picker));
-    rows = hallRows(state.hallScope);
+  const gws = (pt && pt.available ? pt.gws : []).slice().sort((a,b)=>b-a);
+  if (state.hallScope === null ||
+      (state.hallScope !== 'season' && !gws.includes(Number(state.hallScope)))) {
+    state.hallScope = gws.length ? String(gws[0]) : 'season';
   }
+  // Both hall tabs render this, and both panels stay in the DOM, so the ids
+  // have to be per-tab or the page carries duplicates and the labels point at
+  // whichever control happens to come first.
+  const sid = 'hallScope-' + tab, fid = 'hallFocus-' + tab;
+  const scopeSel = el('select',{id:sid,
+    onchange:e => { state.hallScope = e.target.value; render(tab); }},
+    el('option',{value:'season', ...(state.hallScope==='season'?{selected:'selected'}:{})},
+       'Season to date'),
+    gws.map(g => el('option',{value:String(g),
+      ...(String(state.hallScope)===String(g)?{selected:'selected'}:{})}, 'Gameweek '+g)));
 
-  const statCard = k => {
-    if (!rows) return null;
-    if (k === 'defcon' && pt.defcon && pt.defcon.mode === 'unavailable') {
-      return card(specs[k].title, specs[k].note,
-        emptyState('Not available from the API','FPL is not currently publishing defensive contribution data.'));
-    }
-    return hallStatCard(specs[k], rows);
+  const byName = DATA.managers.slice().sort((a,b)=>a.manager.localeCompare(b.manager));
+  const focusSel = el('select',{id:fid,
+    onchange:e => { state.hallFocus = e.target.value ? +e.target.value : null; render(tab); }},
+    el('option',{value:'', ...(state.hallFocus?{}:{selected:'selected'})}, 'Everyone'),
+    byName.map(m => el('option',{value:String(m.entry),
+      ...(state.hallFocus===m.entry?{selected:'selected'}:{})}, m.manager)));
+
+  return el('div',{class:'controls'},
+    el('label',{class:'sub', for:sid}, 'Showing'), scopeSel,
+    el('label',{class:'sub', for:fid}, 'Manager'), focusSel);
+}
+
+/* Where one manager sits in every table at once. Ranks are computed the same
+   way the tables are sorted, so a 3rd here is the same 3rd there. */
+function managerSummary(rows, running, entry, half){
+  const me = rows.find(r => r.entry === entry);
+  const mine = running.find(r => r.entry === entry);
+  const m = DATA.managers.find(x => x.entry === entry);
+  if (!m) return null;
+
+  const place = (list, key, lowGood) => {
+    const sorted = list.slice().sort((a,b)=> lowGood ? a[key]-b[key] : b[key]-a[key]);
+    const i = sorted.findIndex(r => r.entry === entry);
+    return i < 0 ? null : {rank: i+1, of: sorted.length, value: sorted[i][key]};
   };
 
-  /* ================= Hall of Fame ================= */
+  const fame = [
+    ['Goals',              me && place(rows,'goals')],
+    ['Assists',            me && place(rows,'assists')],
+    ['Bonus points',       me && place(rows,'bonus')],
+    ['Defensive contribution', me && place(rows,'defcon')],
+    ['Double-figure hauls',me && place(rows,'dbl')],
+    ['Hat-tricks',         me && place(rows,'hat')],
+  ];
+  // Captaincy blanks and stacked benches are counted as events in the selected
+  // period, so a manager's row matches what the tables below show.
+  const seasonWide = state.hallScope === 'season';
+  const gwPick = seasonWide ? null : Number(state.hallScope);
+  const events = DATA.managers.map(mm => {
+    let flops = 0, benched = 0;
+    (mm.history || []).forEach(x => {
+      if (!seasonWide && x.gw !== gwPick) return;
+      if (x.captain && x.captain_base != null && x.captain_base <= 3) flops++;
+      if ((x.bench || 0) >= 8) benched++;
+    });
+    return {entry: mm.entry, flops, benched};
+  });
+  const shame = [
+    ['Disciplinary points',    me && place(rows,'disc')],
+    ['Captaincy catastrophes', place(events,'flops')],
+    ['Bench disasters',        place(events,'benched')],
+    ['Bench waste',            mine && place(running,'bench')],
+    ['Points burned on hits',  mine && place(running,'hits')],
+  ];
+  const list = half === 'fame' ? fame : shame;
+
+  const rowsOut = list.filter(([,v]) => v).map(([label, v]) =>
+    el('tr',{},
+      el('td',{}, label),
+      el('td',{class:'num'}, String(v.value)),
+      el('td',{class:'num'}, el('strong',{}, ord(v.rank)),
+         el('span',{class:'teamname'}, ' of ' + v.of))));
+
+  const c = card(`${m.manager} — where they stand`,
+    `${m.team} · ${state.hallScope === 'season' ? 'season to date' : 'Gameweek ' + state.hallScope}. Ranked against the whole league.`,
+    rowsOut.length ? table(['Table',{label:'Score',num:true},{label:'Placed',num:true}], rowsOut)
+      : emptyState('Nothing recorded yet','No returns for this manager in this period.'));
+  c.classList.add('summary');   // narrow table, so the columns sit together
+  return c;
+}
+
+/* Bench waste and points burned on hits accumulate up to and including the
+   selected gameweek; one-off disasters show only that week. Rebuilt from each
+   manager's own history so both obey the picker. */
+function hallRunning(){
+  const seasonWide = state.hallScope === 'season';
+  const upTo = seasonWide ? Infinity : Number(state.hallScope);
+  return DATA.managers.map(m => {
+    let bench = 0, hits = 0;
+    (m.history || []).forEach(x => { if (x.gw <= upTo){ bench += x.bench||0; hits += x.hits||0; } });
+    return {entry:m.entry, manager:m.manager, team:m.team, bench, hits};
+  });
+}
+
+function pFame(host){
+  if (!DATA.current_gw) return host.appendChild(card('Hall of Fame', null,
+    emptyState('Nothing to celebrate yet','Give it until Gameweek 1.')));
+  const pt = DATA.player_tables;
   host.appendChild(hallBand('Hall of Fame',
     'Where the points came from, and who your players did it for.'));
+  host.appendChild(card('Player honours',
+    (pt && pt.scope === 'all_15'
+      ? 'Counting all fifteen squad members.'
+      : 'Counting only players who actually lined up, auto-subs included.') + ' Top eight in each table.',
+    hallControls('fame')));
 
-  if (rows) {
-    host.appendChild(hallPositionCard(rows));
-    host.appendChild(hallGrid('cols3', ['goals','hat','assists'].map(statCard)));
-    host.appendChild(hallGrid('cols3', ['dbl','bonus','defcon'].map(statCard)));
-  } else {
-    host.appendChild(card('Player honours', null,
+  if (!(pt && pt.available)) {
+    return host.appendChild(card('Player honours', null,
       emptyState('No player data yet','These tables fill in once a gameweek has been scored.')));
   }
+  const rows = hallRows(state.hallScope);
+  if (state.hallFocus){
+    const c = managerSummary(rows, hallRunning(), state.hallFocus, 'fame');
+    if (c) host.appendChild(c);
+  }
+  const specs = {}; hallTableSpecs().forEach(sp => specs[sp.key] = sp);
+  const statCard = k => {
+    if (k === 'defcon' && pt.defcon && pt.defcon.mode === 'unavailable')
+      return card(specs[k].title, specs[k].note,
+        emptyState('Not available from the API','FPL is not publishing defensive contribution data.'));
+    return hallStatCard(specs[k], rows);
+  };
+  host.appendChild(hallGrid('cols3', ['goals','hat','assists'].map(statCard)));
+  host.appendChild(hallGrid('cols3', ['dbl','bonus','defcon'].map(statCard)));
+  host.appendChild(foldCard('Points by position',
+    `${DATA.league.size} managers`,
+    'Where each manager is winning their points.', false, hallPositionCard(rows, true)));
+}
 
-  /* ================= Hall of Shame ================= */
+function pShame(host){
+  if (!DATA.current_gw) return host.appendChild(card('Hall of Shame', null,
+    emptyState('Nobody has embarrassed themselves yet','Give it until Gameweek 1.')));
+  const pt = DATA.player_tables;
   host.appendChild(hallBand('Hall of Shame',
     'Cards, hits, and decisions best not dwelt upon.', true));
+  host.appendChild(card('The damage', 'Pick a gameweek, or a manager to see only their numbers.',
+    hallControls('shame')));
 
-  const hitsCard = card('Most points burned on hits',
+  const rows = (pt && pt.available) ? hallRows(state.hallScope) : [];
+  const running = hallRunning();
+  if (state.hallFocus){
+    const c = managerSummary(rows, running, state.hallFocus, 'shame');
+    if (c) host.appendChild(c);
+  }
+
+  const seasonWide = state.hallScope === 'season';
+  const pickedGw = seasonWide ? null : Number(state.hallScope);
+  const suffix = seasonWide ? 'season to date' : `to end of GW${pickedGw}`;
+  const eventScope = seasonWide ? 'across the season' : `in GW${pickedGw}`;
+
+  const weeks = [];
+  DATA.managers.forEach(m => (m.history || []).forEach(x => {
+    if (seasonWide || x.gw === pickedGw) weeks.push({m, x});
+  }));
+  const topOf = (arr, key, n) => arr.slice().sort((a,b)=>b[key]-a[key]).slice(0,n);
+
+  const specs = {}; hallTableSpecs().forEach(sp => specs[sp.key] = sp);
+  const discCard = rows.length ? hallStatCard(specs['disc'], rows)
+    : card('Disciplinary points', specs['disc'].note,
+        emptyState('Nothing yet','No cards recorded in this period.'));
+
+  const hitRows = topOf(running.filter(r=>r.hits>0), 'hits', 8);
+  const hitsCard = card(`Most points burned on hits · ${suffix}`,
     'Every −4 tells a story. Rarely a happy one.',
-    h.hits_season.length && h.hits_season[0].points ?
-      table(['Manager',{label:'Points lost',num:true}],
-        h.hits_season.map(b => el('tr',{}, nameCell(b.manager,b.team),
-          el('td',{class:'num'}, el('span',{class:'delta-dn'}, '−'+b.points)))))
+    hitRows.length ? table(['Manager',{label:'Points lost',num:true}],
+      hitRows.map(r => el('tr',{}, nameCell(r.manager, r.team, r.entry),
+        el('td',{class:'num'}, el('span',{class:'delta-dn'}, '−'+r.hits)))))
       : emptyState('Nobody has taken a hit','Either great patience or total apathy.'));
+  host.appendChild(hallGrid('cols2', [discCard, hitsCard]));
 
-  host.appendChild(hallGrid('cols2', [statCard('disc'), hitsCard]));
-
-  const captains = card('Captaincy catastrophes',
+  const flops = weeks.filter(w => w.x.captain && w.x.captain_base != null && w.x.captain_base <= 3)
+                     .sort((a,b)=> a.x.captain_base - b.x.captain_base || b.x.gw - a.x.gw).slice(0,8);
+  const captains = card(`Captaincy catastrophes · ${eventScope}`,
     'The armband handed to a player who then did nothing at all.',
-    h.captain_flops.length ? table(['GW','Manager','Captain',{label:'Scored',num:true}],
-      h.captain_flops.map(f => el('tr',{},
-        el('td',{class:'pos'}, 'GW'+f.gw), nameCell(f.manager, f.team),
-        el('td',{}, f.player),
-        el('td',{class:'num'}, el('span',{class: f.points<=2?'delta-dn':''}, String(f.points))))))
+    flops.length ? table(['GW','Manager','Captain',{label:'Scored',num:true}],
+      flops.map(f => el('tr',{}, el('td',{class:'pos'}, 'GW'+f.x.gw),
+        nameCell(f.m.manager, f.m.team, f.m.entry), el('td',{}, f.x.captain),
+        el('td',{class:'num'}, el('span',{class: f.x.captain_base<=2?'delta-dn':''},
+          String(f.x.captain_base))))))
       : emptyState('No disasters yet','Remarkably sensible captaincy all round.'));
 
-  const bench = card('Bench disasters',
+  const dis = weeks.filter(w => (w.x.bench||0) >= 8).sort((a,b)=> b.x.bench - a.x.bench).slice(0,8);
+  const bench = card(`Bench disasters · ${eventScope}`,
     'Points that sat and watched. Eight or more in a single gameweek.',
-    h.bench_disasters.length ? table(['GW','Manager',{label:'Left on bench',num:true}],
-      h.bench_disasters.map(b => el('tr',{},
-        el('td',{class:'pos'},'GW'+b.gw), nameCell(b.manager,b.team),
-        el('td',{class:'num'}, String(b.points)))))
+    dis.length ? table(['GW','Manager',{label:'Left on bench',num:true}],
+      dis.map(b => el('tr',{}, el('td',{class:'pos'},'GW'+b.x.gw),
+        nameCell(b.m.manager,b.m.team,b.m.entry), el('td',{class:'num'}, String(b.x.bench)))))
       : emptyState('Nothing wasted yet','Suspiciously good squad management.'));
 
-  const benchSeason = card('Season-long bench waste',
-    'Cumulative points left in the dugout.',
-    h.bench_season.length ? table(['Manager',{label:'Points',num:true}],
-      h.bench_season.map(b => el('tr',{}, nameCell(b.manager,b.team),
-        el('td',{class:'num'}, String(b.points)))))
+  const bw = topOf(running.filter(r=>r.bench>0), 'bench', 8);
+  const benchSeason = card(`Bench waste · ${suffix}`, 'Cumulative points left in the dugout.',
+    bw.length ? table(['Manager',{label:'Points',num:true}],
+      bw.map(r => el('tr',{}, nameCell(r.manager,r.team,r.entry),
+        el('td',{class:'num'}, String(r.bench)))))
       : emptyState('Nothing wasted yet','Nobody has left anything behind.'));
 
   host.appendChild(hallGrid('cols3', [captains, bench, benchSeason]));
 }
 
-/* ---------- squads */
 function pSquads(host){
   const D = DATA.differentials;
   const gws = (D.gws || []).slice().sort((a,b)=>b-a);
@@ -1198,6 +1440,99 @@ function pSquads(host){
       : emptyState('No differentials','Everyone owns everyone. A league of copycats.')));
 
   host.appendChild(grid);
+
+  /* Who actually went their own way. For every player a manager fielded, what
+     share of the league fielded him too; the average across the eleven is the
+     score. Starters only, after auto-subs. Folded shut because it is a row per
+     manager and the tab is long enough already. */
+  const mav = view.maverick || [];
+  if (mav.length){
+    const byEntry = {};
+    DATA.managers.forEach(m => byEntry[m.entry] = m);
+
+    const perf = {};
+    if (isSeason){
+      DATA.managers.forEach(m => perf[m.entry] = {pts: m.total, rank: m.rank});
+    } else {
+      const gwNum = Number(scope), scores = [];
+      DATA.managers.forEach(m => {
+        const h = (m.history||[]).find(x => x.gw === gwNum);
+        if (h) scores.push({entry:m.entry, pts:h.net});
+      });
+      scores.sort((a,b)=>b.pts-a.pts);
+      let lastPts = null, lastRank = 0;
+      scores.forEach((r,i)=>{
+        if (r.pts !== lastPts){ lastRank = i+1; lastPts = r.pts; }
+        perf[r.entry] = {pts:r.pts, rank:lastRank};
+      });
+    }
+
+    const least = mav[0], most = mav[mav.length-1];
+    const nameOf = e => byEntry[e] ? byEntry[e].manager : '';
+    host.appendChild(foldCard(
+      isSeason ? 'Least templated squads · season' : `Least templated squads · GW${scope}`,
+      `${nameOf(least[0])} furthest off-script at ${least[1]}%`,
+      isSeason
+        ? 'Average across the season of how much of the league fielded the same players, plus the three each manager leaned on that the rest mostly ignored. Lowest is the most independent squad.'
+        : `Of the eleven each fielded, how much of the league fielded them too, plus the three least-owned in that eleven. ${nameOf(most[0])} stuck closest to the template at ${most[1]}%.`,
+      false,
+      table(['Manager',
+             {label: isSeason ? 'Total' : 'GW pts', num:true},
+             {label: isSeason ? 'Rank' : 'GW rank', num:true},
+             {label:'Template match',num:true},
+             {label: isSeason ? 'Rare picks/GW' : 'Rare picks', num:true},
+             isSeason ? 'Players they backed alone' : 'Their differentials'],
+        mav.map(([entry, pct, rare, top3]) => {
+          const m = byEntry[entry];
+          if (!m) return null;
+          const pf = perf[entry] || {};
+          const picks = (top3 || []).map(([player, own]) =>
+            el('div',{class:'diffpick'},
+              el('span',{class:'nm'}, player),
+              el('span',{class:'ow'}, own + '%')));
+          return el('tr',{},
+            nameCell(m.manager, m.team, m.entry),
+            el('td',{class:'num'}, pf.pts === undefined ? '–' : String(pf.pts)),
+            el('td',{class:'num'}, pf.rank === undefined ? '–' : ord(pf.rank)),
+            el('td',{class:'num'}, el('strong',{}, pct + '%')),
+            el('td',{class:'num'}, String(rare)),
+            el('td',{class:'diffcell'}, picks.length ? picks : el('span',{class:'teamname'},'–')));
+        }).filter(Boolean))));
+  }
+}
+
+/* ---------- archive */
+function pArchive(host){
+  const written = (DATA.commentary && DATA.commentary.written) || {};
+  const keys = Object.keys(written).filter(k => !k.startsWith('_'));
+  if (!keys.length) return host.appendChild(card('Archive', null,
+    emptyState('Nothing published yet',
+      'Monthly round-ups and cup bulletins appear here once they are added to docs/commentary.json.')));
+
+  const monthKeys = keys.filter(k => /^\d{4}-\d{2}$/.test(k)).sort().reverse();
+  const cupKeys   = keys.filter(k => /^cup-gw\d+$/.test(k))
+                        .sort((a,b)=> +b.replace(/\D/g,'') - +a.replace(/\D/g,''));
+  const others    = keys.filter(k => !monthKeys.includes(k) && !cupKeys.includes(k));
+
+  const label = k => {
+    const m = DATA.months.find(x => x.key === k);
+    if (m) return m.label + ' round-up';
+    if (/^cup-gw/.test(k)) return 'Cup · Gameweek ' + k.replace(/\D/g,'');
+    return k;
+  };
+  const bodyOf = entry => entry.body_html
+    ? el('div',{class:'emailbox', html: entry.body_html})
+    : el('div',{class:'emailbox'}, el('p',{}, entry.body || ''));
+
+  host.appendChild(card('Archive',
+    `Every round-up published so far — ${monthKeys.length} monthly${cupKeys.length ? ' and ' + cupKeys.length + ' cup' : ''}. The most recent is open; the rest fold away.`));
+
+  let first = true;
+  [...monthKeys, ...cupKeys, ...others].forEach(k => {
+    const entry = written[k] || {};
+    host.appendChild(foldCard(entry.title || label(k), label(k), null, first, bodyOf(entry)));
+    first = false;
+  });
 }
 
 /* ---------- cup */
@@ -1597,8 +1932,9 @@ function pEmail(host){
 
 /* ============================================================ boot */
 const TABS = [['overview','Overview'],['month','Manager of the Month'],['season','Season table'],
-              ['shame','Hall of Fame & Shame'],['squads','Squads'],['cup','Cup'],
-              ['prizes','Prize pot'],['email','Email round-up']];
+              ['fame','Hall of Fame'],['shame','Hall of Shame'],['squads','Squads'],
+              ['cup','Cup'],['prizes','Prize pot'],['email','Email round-up'],
+              ['archive','Archive']];
 
 function initTheme(){
   // Dark is the house style. A visitor who switches to light gets their choice
